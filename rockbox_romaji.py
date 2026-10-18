@@ -1,4 +1,4 @@
-#!/usr/bin/env uv run
+#!/usr/bin/env -S uv run
 # /// script
 # dependencies = [
 #     "pykakasi>=2.2.1",
@@ -8,7 +8,19 @@
 
 import os
 import sys
+import shutil
 from pathlib import Path
+
+# If pykakasi is not installed in current environment, auto-delegate to uv run
+try:
+    import pykakasi
+    import mutagen
+except ImportError:
+    if shutil.which("uv"):
+        os.execvp("uv", ["uv", "run", "--with", "pykakasi,mutagen", "python3", str(Path(__file__).resolve())] + sys.argv[1:])
+    else:
+        print("Error: Missing pykakasi or mutagen. Please install them or install uv.")
+        sys.exit(1)
 
 # Add lib directory to path
 script_dir = Path(__file__).resolve().parent

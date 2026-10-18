@@ -32,27 +32,73 @@ SYMBOL_REPLACEMENTS = {
     '＆': '&',
     '％': '%',
     '＋': '+',
-    '――': '-',
-    '—': '-',
-    '–': '-',
-    '～': '-',
-    '〜': '-',
-    '~': '-',
     '・': ' ',
     '…': '...',
     '、': ', ',
     '。': '',
+    '！': '!',
+    '？': '?',
+    '：': ': ',
+    '　': ' ',
+}
+
+# Japanese verb and adjective inflection endings (okurigana) that attach to kanji stems
+OKURIGANA_PATTERNS = re.compile(
+    r'^(?:[ただてで]|たら|だら|たり|だり|ない|なかった|ず|ぬ|る|れる|られる|せる|させる|れた|れたら|れば|い|かった|く|ければ|さ|ます|ました|たい|たく|り|き|ち|し)$'
+)
+
+# Particles and small words kept lowercase in middle of titles
+PARTICLES = {
+    'no', 'wo', 'wa', 'ga', 'ni', 'to', 'de', 'mo', 'na', 'he', 'e',
+    'kara', 'made', 'in', 'on', 'at', 'of', 'and', 'the', 'a', 'an'
 }
 
 
+def is_kanji(s: str) -> bool:
+    return bool(re.search(r'[\u4e00-\u9fff]', s))
+
+
+def is_hiragana(s: str) -> bool:
+    return bool(re.search(r'^[\u3040-\u309f]+$', s))
+
+
 def contains_japanese(text: str) -> bool:
-    """Check if text contains Japanese Hiragana, Katakana, or Kanji."""
+    """Check if text contains Japanese Hiragana, Katakana, Kanji, or iteration mark."""
     if not text:
         return False
-    return bool(re.search(r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]', text))
+    return bool(re.search(r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\u3005]', text))
 
 
-def sanitize_filename(name: str) -> str:
+def capitalize_romaji_title(text: str) -> str:
+    """Apply standard Title Case to Romanized titles/folders preserving particles and acronyms."""
+    def cap_word(w: str, is_first: bool = False) -> str:
+        if not w:
+            return w
+        # Preserve acronyms like CD, DVD, OST, USA
+        if len(w) > 1 and w.isupper():
+            return w
+        wl = w.lower()
+        if not is_first and wl in PARTICLES:
+            return wl
+        return w[0].upper() + w[1:].lower() if len(w) > 1 else w.upper()
+
+    tokens = re.split(r'(\s+|[-–—/()[\],.:;])', text)
+    res = []
+    is_first = True
+    for t in tokens:
+        if not t:
+            continue
+        if re.match(r'^\s+$', t) or re.match(r'^[-–—/()[\],.:;]+$', t):
+            res.append(t)
+            if re.search(r'[-–—/([.:;]', t):
+                is_first = True
+        else:
+            res.append(cap_word(t, is_first))
+            is_first = False
+    return ''.join(res)
+
+
+def sanitize_filename(name: str, for_folder: bool = False) -> str:
     """Sanitize name for FAT32 / exFAT filesystems."""
     if not name:
         return name
@@ -66,62 +112,104 @@ def sanitize_filename(name: str) -> str:
     # Remove characters forbidden by FAT32 / exFAT: \ / : * ? " < > |
     sanitized = re.sub(r'[\\/:*?"<>|]', '', name)
 
-    # Normalize multiple whitespace characters
+    # Normalize multiple whitespace characters and dashes
+    sanitized = re.sub(r'\s*-\s*', ' - ', sanitized)
     sanitized = re.sub(r'\s+', ' ', sanitized)
 
-    # Strip leading and trailing dots and spaces (problematic on FAT32)
-    sanitized = sanitized.strip(' .')
+    # Strip leading and trailing dots, spaces, hyphens, commas
+    sanitized = sanitized.strip(' .,-_')
 
     if not sanitized:
         return "Unknown"
 
+    if for_folder:
+        sanitized = capitalize_romaji_title(sanitized)
+
     return sanitized
 
 
-def to_romaji(text: str, for_filename: bool = False) -> str:
+def to_romaji(text: str, for_filename: bool = False, for_folder: bool = False) -> str:
     """
     Transliterate Japanese Kana/Kanji to Romaji using Hepburn romanization.
-    If text has no Japanese characters, normalize fullwidth characters without mangling text.
-    If for_filename is True, apply FAT32 filename sanitization.
+    Properly handles verb/adjective okurigana, iteration marks (々),
+    wave dashes (〜), and spacing around punctuation.
     """
     if not text:
         return text
 
-    # First normalize fullwidth forms (e.g. fullwidth numbers, letters, spaces)
+    # Expand iteration mark 々 to preceding kanji (e.g. 燦々 -> 燦燦)
+    text = re.sub(r'([\u4e00-\u9fff])々', r'\1\1', text)
+
+    # Clean dashes, subtitles, and prolonged symbols in folder/title names
+    text = re.sub(r'\s*[〜～~]\s*(.*?)\s*[〜～~]\s*', r' - \1 - ', text)
+    text = re.sub(r'[〜～~]', ' - ', text)
+    text = re.sub(r'――+', ' - ', text)
+
+    # Normalize fullwidth forms (e.g. fullwidth numbers, letters, spaces)
     normalized = unicodedata.normalize('NFKC', text)
 
     for old_sym, new_sym in SYMBOL_REPLACEMENTS.items():
         normalized = normalized.replace(old_sym, new_sym)
 
     if not contains_japanese(normalized):
-        if for_filename:
-            return sanitize_filename(normalized)
+        if for_filename or for_folder:
+            return sanitize_filename(normalized, for_folder=for_folder)
         return re.sub(r'\s+', ' ', normalized).strip()
+
+    # Ensure space around parentheses if adjoining Japanese/alphanumeric
+    normalized = re.sub(r'([a-zA-Z0-9\u3040-\u30ff\u4e00-\u9fff])([(\[])', r'\1 \2', normalized)
+    normalized = re.sub(r'([)\]])([a-zA-Z0-9\u3040-\u30ff\u4e00-\u9fff])', r'\1 \2', normalized)
 
     # Transliterate Japanese segments using pykakasi
     items = _kakasi.convert(normalized)
-    out = []
+    tokens = []
+    prev_was_kanji = False
+
     for item in items:
         orig = item['orig']
         hep = item['hepburn']
+
+        # Check if okurigana attaches to previous kanji stem (e.g. 死ん + だ -> shinda)
+        if prev_was_kanji and is_hiragana(orig) and OKURIGANA_PATTERNS.match(orig):
+            if tokens:
+                tokens[-1] += hep
+                prev_was_kanji = False
+                continue
+
+        # If hep has kurikaesi or error, fallback to orig
+        if 'kurikaesi' in hep:
+            hep = orig
+
+        # Spacing logic: keep track of whether orig was kanji
         if contains_japanese(orig):
-            # Add space separator if adjoining alphanumeric character
-            if out and re.search(r'[a-zA-Z0-9]$', out[-1]) and re.search(r'^[a-zA-Z0-9]', hep):
-                out.append(' ')
-            out.append(hep)
+            tokens.append(hep)
+            prev_was_kanji = is_kanji(orig)
         else:
-            out.append(orig)
+            tokens.append(orig)
+            prev_was_kanji = False
+
+    # Join tokens inserting spaces between alphanumeric words
+    out = []
+    for t in tokens:
+        if not t:
+            continue
+        if out and re.search(r'[a-zA-Z0-9]$', out[-1]) and re.search(r'^[a-zA-Z0-9]', t):
+            out.append(' ')
+        out.append(t)
 
     converted = ''.join(out)
 
-    # Clean up double spaces and unnatural punctuation spaces
-    converted = re.sub(r' +', ' ', converted)
+    # Clean up punctuation spacing
+    converted = re.sub(r'\s*-\s*', ' - ', converted)
     converted = re.sub(r'\s+([,.:;?!~）\)])', r'\1', converted)
     converted = re.sub(r'([（\(])\s+', r'\1', converted)
-    converted = converted.strip()
+    converted = re.sub(r' +', ' ', converted).strip()
+
+    if for_folder:
+        return sanitize_filename(converted, for_folder=True)
 
     if for_filename:
-        return sanitize_filename(converted)
+        return sanitize_filename(converted, for_folder=False)
 
     return converted
 
@@ -143,7 +231,7 @@ def process_audio_tags(filepath: Path, dry_run: bool) -> bool:
                     frame = audio.tags[key]
                     if hasattr(frame, 'text'):
                         old_text = [str(t) for t in frame.text]
-                        new_text = [to_romaji(t, for_filename=False) for t in old_text]
+                        new_text = [to_romaji(t, for_filename=False, for_folder=False) for t in old_text]
                         if old_text != new_text:
                             modified = True
                             with _print_lock:
@@ -158,9 +246,9 @@ def process_audio_tags(filepath: Path, dry_run: bool) -> bool:
                 if any(k in key_lower for k in ['title', 'artist', 'album', 'nam', 'art', 'alb']):
                     val = audio[key]
                     if isinstance(val, list):
-                        new_val = [to_romaji(str(v), for_filename=False) for v in val]
+                        new_val = [to_romaji(str(v), for_filename=False, for_folder=False) for v in val]
                     else:
-                        new_val = to_romaji(str(val), for_filename=False)
+                        new_val = to_romaji(str(val), for_filename=False, for_folder=False)
 
                     if str(val) != str(new_val):
                         modified = True
@@ -187,21 +275,29 @@ def process_lrc_file(lrc_path: Path, dry_run: bool) -> bool:
         return False
 
     try:
-        lines = lrc_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        content = lrc_path.read_text(encoding="utf-8", errors="ignore")
+        if not contains_japanese(content):
+            return False
+
+        lines = content.splitlines()
         new_lines = []
         lrc_regex = re.compile(r"^(\[\d{2}:\d{2}(?:\.\d{2,3})?\])(.*)$")
         changed = False
 
         for line in lines:
+            if not contains_japanese(line):
+                new_lines.append(line)
+                continue
+
             match = lrc_regex.match(line)
             if match:
                 timestamp, lyric = match.groups()
-                converted_lyric = to_romaji(lyric, for_filename=False)
+                converted_lyric = to_romaji(lyric, for_filename=False, for_folder=False)
                 if converted_lyric != lyric:
                     changed = True
                 new_lines.append(f"{timestamp}{converted_lyric}")
             else:
-                converted_line = to_romaji(line, for_filename=False)
+                converted_line = to_romaji(line, for_filename=False, for_folder=False)
                 if converted_line != line:
                     changed = True
                 new_lines.append(converted_line)
@@ -251,6 +347,13 @@ def resolve_playlist_track(line: str, playlist_path: Path, root_dir: Path) -> Pa
         p4 = (playlist_path.parent / line).resolve()
         if p4.exists():
             return p4
+
+    # 5. Check if under root_dir/line without going outside root_dir
+    if line.startswith('../Music/'):
+        cand = (root_dir / line[3:]).resolve()
+        if cand.exists():
+            return cand
+        return cand
 
     return p1
 
@@ -328,7 +431,7 @@ def process_playlist_file(playlist_path: Path, root_dir: Path, path_map: dict, d
                     parts = line_str.split(",", 1)
                     if len(parts) == 2:
                         header, title = parts
-                        new_title = to_romaji(title, for_filename=False)
+                        new_title = to_romaji(title, for_filename=False, for_folder=False)
                         new_lines.append(f"{header},{new_title}")
                         modified = True
                         continue
@@ -337,7 +440,8 @@ def process_playlist_file(playlist_path: Path, root_dir: Path, path_map: dict, d
 
             # Update path entry using path_map
             updated_line = line_str
-            for old_p, new_p in path_map.items():
+            # Sort by descending length so longer paths match before shorter substrings
+            for old_p, new_p in sorted(path_map.items(), key=lambda x: len(Path(x[0]).name), reverse=True):
                 old_name = Path(old_p).name
                 new_name = Path(new_p).name
                 if old_name != new_name and old_name in updated_line:
@@ -355,7 +459,7 @@ def process_playlist_file(playlist_path: Path, root_dir: Path, path_map: dict, d
 
         # Rename playlist file itself if name contains Japanese
         if contains_japanese(actual_playlist_path.stem):
-            new_pl_stem = to_romaji(actual_playlist_path.stem, for_filename=True)
+            new_pl_stem = to_romaji(actual_playlist_path.stem, for_filename=True, for_folder=False)
             new_pl_name = f"{new_pl_stem}{actual_playlist_path.suffix}"
             if actual_playlist_path.name != new_pl_name:
                 rename_file_or_dir(actual_playlist_path, new_pl_name, dry_run, path_map)
@@ -383,8 +487,12 @@ def run_romaji_transliteration(
         return 1
 
     path_map: dict[str, str] = {}
+    dir_map: dict[str, str] = {}
     audio_files: list[Path] = []
     playlists_to_update: list[Path] = []
+
+    music_scan_dir = root_dir / "Music" if (root_dir / "Music").is_dir() else root_dir
+    playlists_scan_dir = root_dir / "Playlists" if (root_dir / "Playlists").is_dir() else root_dir
 
     # 1. Target resolution
     if playlist_arg:
@@ -412,10 +520,6 @@ def run_romaji_transliteration(
 
     elif all_library:
         print(f"-> Scanning entire library at: {root_dir}")
-        # Detect music root (either root_dir/Music or root_dir directly)
-        music_scan_dir = root_dir / "Music" if (root_dir / "Music").is_dir() else root_dir
-        playlists_scan_dir = root_dir / "Playlists" if (root_dir / "Playlists").is_dir() else root_dir
-
         for root, dirs, files in os.walk(music_scan_dir):
             rel = os.path.relpath(root, root_dir)
             if rel.startswith(('Playlists', 'lib', '.git', '.rockbox', 'LOST.DIR', 'System Volume Information')):
@@ -453,7 +557,7 @@ def run_romaji_transliteration(
         ext = audio_path.suffix
 
         if contains_japanese(stem):
-            new_stem = to_romaji(stem, for_filename=True)
+            new_stem = to_romaji(stem, for_filename=True, for_folder=False)
             new_filename = f"{new_stem}{ext}"
             rename_file_or_dir(audio_path, new_filename, dry_run, path_map)
 
@@ -461,7 +565,7 @@ def run_romaji_transliteration(
             if lrc_path.exists():
                 rename_file_or_dir(lrc_path, f"{new_stem}.lrc", dry_run, path_map)
 
-    # 2b. Rename directories bottom-up (Albums before Artists)
+    # 2b. Collect all parent directories up to root_dir
     parent_dirs = set()
     for f in audio_files:
         p = f.parent
@@ -471,18 +575,46 @@ def run_romaji_transliteration(
             parent_dirs.add(p)
             p = p.parent
 
-    # Sort directories by depth (deepest first)
+    # Also scan directories directly under music_scan_dir for Japanese names
+    if all_library and music_scan_dir.exists():
+        for root, dirs, _ in os.walk(music_scan_dir):
+            rel = os.path.relpath(root, root_dir)
+            if rel.startswith(('Playlists', 'lib', '.git', '.rockbox', 'LOST.DIR', 'System Volume Information')):
+                continue
+            for d in dirs:
+                if contains_japanese(d):
+                    p = Path(root) / d
+                    while p != root_dir and p != p.parent:
+                        if p.name in ('Music', 'Playlists', '.'):
+                            break
+                        parent_dirs.add(p)
+                        p = p.parent
+
+    # Helper to resolve actual path on disk when parents were renamed
+    def resolve_current_dir(target_dir: Path) -> Path:
+        parts = list(target_dir.parts)
+        cur = Path(parts[0])
+        for part in parts[1:]:
+            cand = cur / part
+            if str(cand) in dir_map:
+                cur = Path(dir_map[str(cand)])
+            else:
+                cur = cand
+        return cur
+
+    # Sort directories by depth (deepest first: Albums before Artists)
     sorted_dirs = sorted(list(parent_dirs), key=lambda d: len(d.parts), reverse=True)
 
     for d in sorted_dirs:
-        # Check current path dynamically if parent was renamed
-        current_d = Path(path_map.get(str(d), d))
+        current_d = resolve_current_dir(d)
         if not current_d.exists() and not dry_run:
             continue
 
         if contains_japanese(current_d.name):
-            new_dir_name = to_romaji(current_d.name, for_filename=True)
-            rename_file_or_dir(current_d, new_dir_name, dry_run, path_map)
+            new_dir_name = to_romaji(current_d.name, for_filename=True, for_folder=True)
+            new_d = rename_file_or_dir(current_d, new_dir_name, dry_run, path_map)
+            dir_map[str(d)] = str(new_d)
+            dir_map[str(current_d)] = str(new_d)
 
     print(f"\n[Step 3/3] Updating playlist paths and filenames ({len(playlists_to_update)} playlist(s))...")
     for pl_path in playlists_to_update:

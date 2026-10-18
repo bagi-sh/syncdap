@@ -128,7 +128,7 @@ def sanitize_filename(name: str, for_folder: bool = False) -> str:
     return sanitized
 
 
-def to_romaji(text: str, for_filename: bool = False, for_folder: bool = False) -> str:
+def to_romaji(text: str, for_filename: bool = False, for_folder: bool = False, for_tag: bool = False) -> str:
     """
     Transliterate Japanese Kana/Kanji to Romaji using Hepburn romanization.
     Properly handles verb/adjective okurigana, iteration marks (々),
@@ -229,8 +229,9 @@ def process_audio_tags(filepath: Path, dry_run: bool) -> bool:
 
         modified = False
 
-        # 1. MP3 with ID3 frames
-        if hasattr(audio, 'tags') and audio.tags is not None and hasattr(audio.tags, 'keys'):
+        # Discriminate ID3 (MP3) from VorbisComments (FLAC/OGG) and MP4 (M4A)
+        is_id3 = isinstance(getattr(audio, 'tags', None), mutagen.id3.ID3)
+        if is_id3:
             for key in list(audio.tags.keys()):
                 key_lower = key.lower()
                 if any(k in key_lower for k in ['tit2', 'tpe1', 'talb', 'title', 'artist', 'album']):
@@ -247,10 +248,11 @@ def process_audio_tags(filepath: Path, dry_run: bool) -> bool:
 
         # 2. FLAC, OGG, M4A, WAV (VorbisComments / MP4Tags)
         else:
-            for key in list(audio.keys()):
+            tag_dict = audio.tags if audio.tags is not None else audio
+            for key in list(tag_dict.keys()):
                 key_lower = key.lower()
                 if any(k in key_lower for k in ['title', 'artist', 'album', 'nam', 'art', 'alb']):
-                    val = audio[key]
+                    val = tag_dict[key]
                     if isinstance(val, list):
                         new_val = [to_romaji(str(v), for_filename=False, for_folder=False, for_tag=True) for v in val]
                     else:
@@ -261,7 +263,7 @@ def process_audio_tags(filepath: Path, dry_run: bool) -> bool:
                         with _print_lock:
                             print(f"   [TAG] {filepath.name} ({key}): '{val}' -> '{new_val}'")
                         if not dry_run:
-                            audio[key] = new_val
+                            tag_dict[key] = new_val
 
         if modified and not dry_run:
             audio.save()

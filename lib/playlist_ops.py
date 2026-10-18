@@ -102,9 +102,22 @@ def resolve_track_file(raw_entry, pl_dir):
     Resolve raw playlist line to absolute track file on disk.
     Tries exact path, and if missing, checks alternative audio extensions.
     """
-    exact_path = os.path.normpath(os.path.join(pl_dir, raw_entry))
+    clean_entry = raw_entry.strip()
+    if clean_entry.startswith('/sdcard/'):
+        clean_entry = clean_entry[8:]
+    elif clean_entry.startswith('sdcard/'):
+        clean_entry = clean_entry[7:]
+
+    # Check relative to pl_dir
+    exact_path = os.path.normpath(os.path.join(pl_dir, clean_entry))
     if os.path.isfile(exact_path):
         return exact_path
+
+    # Check relative to parent of pl_dir (e.g. DAP root)
+    dap_root = os.path.dirname(pl_dir)
+    dap_path = os.path.normpath(os.path.join(dap_root, clean_entry))
+    if os.path.isfile(dap_path):
+        return dap_path
 
     # Try searching across known extensions
     stem, _ = os.path.splitext(exact_path)

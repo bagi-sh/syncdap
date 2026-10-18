@@ -211,12 +211,18 @@ def to_romaji(text: str, for_filename: bool = False, for_folder: bool = False) -
     if for_filename:
         return sanitize_filename(converted, for_folder=False)
 
+    if for_tag:
+        return capitalize_romaji_title(converted)
+
     return converted
 
 
 def process_audio_tags(filepath: Path, dry_run: bool) -> bool:
     """Update Japanese tags (Title, Artist, Album) to Romaji in audio metadata."""
     try:
+        if not filepath.exists() or filepath.stat().st_size == 0:
+            return False
+
         audio = File(filepath)
         if audio is None:
             return False
@@ -231,7 +237,7 @@ def process_audio_tags(filepath: Path, dry_run: bool) -> bool:
                     frame = audio.tags[key]
                     if hasattr(frame, 'text'):
                         old_text = [str(t) for t in frame.text]
-                        new_text = [to_romaji(t, for_filename=False, for_folder=False) for t in old_text]
+                        new_text = [to_romaji(t, for_filename=False, for_folder=False, for_tag=True) for t in old_text]
                         if old_text != new_text:
                             modified = True
                             with _print_lock:
@@ -246,9 +252,9 @@ def process_audio_tags(filepath: Path, dry_run: bool) -> bool:
                 if any(k in key_lower for k in ['title', 'artist', 'album', 'nam', 'art', 'alb']):
                     val = audio[key]
                     if isinstance(val, list):
-                        new_val = [to_romaji(str(v), for_filename=False, for_folder=False) for v in val]
+                        new_val = [to_romaji(str(v), for_filename=False, for_folder=False, for_tag=True) for v in val]
                     else:
-                        new_val = to_romaji(str(val), for_filename=False, for_folder=False)
+                        new_val = to_romaji(str(val), for_filename=False, for_folder=False, for_tag=True)
 
                     if str(val) != str(new_val):
                         modified = True

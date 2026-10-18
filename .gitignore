@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary session & runtime files
+*.tmp
+spotdl_marker.*
+spotdl_session.*
+batch_meta.spotdl
+erros.spotdl
+
+# Audio & media files (if downloaded to local workspace)
+*.mp3
+*.flac
+*.m4a
+*.ogg
+*.opus
+*.wav
+*.lrc
+cover.jpg
+cover.jpeg
+cover.png
+folder.jpg
+folder.jpeg
+folder.png
+
+# Environment / OS / editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.venv/
+.env

@@ -49,8 +49,21 @@ ALL_MODE=false
 ASSUME_YES=false
 KEEP_OLD=false
 DRY_RUN=false
+TARGET_ROOT="."
+DEDUP_MODE=false
+FIX_TAGS_MODE=false
+STATUS_MODE=false
 TARGET_M3U=""
 YTDLP_JS_ARGS=()
+
+resolve_music_root() {
+    local base="${TARGET_ROOT:-.}"
+    if [ -d "$base/Music" ]; then
+        echo "$base/Music"
+    else
+        echo "$base"
+    fi
+}
 
 # Python runner helper with mutagen, eyed3, requests, pykakasi
 run_py() {

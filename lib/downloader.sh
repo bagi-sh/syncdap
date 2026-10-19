@@ -23,6 +23,9 @@ run_spotdl_download() {
         "${SPOTDL_FORMAT_ARGS[@]}"
         --threads "$THREADS"
         --output "{artist}/{album}/{track-number} {title} - {artist}.{output-ext}"
+        --detect-formats mp3 flac m4a ogg opus wav
+        --scan-for-songs
+        --overwrite skip
         --generate-lrc
         --audio youtube youtube-music soundcloud bandcamp
         --max-retries 1

@@ -20,6 +20,7 @@ from mutagen.oggopus import OggOpus
 lock = threading.Lock()
 processed_albums = 0
 updated_tracks = 0
+already_optimized_albums = 0
 
 AUDIO_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav')
 
@@ -133,6 +134,27 @@ def embed_cover_in_file(file_path, img_data, mime_type):
     return False
 
 
+def has_embedded_cover(file_path):
+    """Quick check if an audio file contains embedded cover art."""
+    ext = os.path.splitext(file_path)[1].lower()
+    try:
+        if ext == '.mp3':
+            audio = MP3(file_path, ID3=ID3)
+            return bool(audio.tags and any(isinstance(t, APIC) for t in audio.tags.values()))
+        elif ext == '.flac':
+            audio = FLAC(file_path)
+            return bool(audio.pictures)
+        elif ext == '.m4a':
+            audio = MP4(file_path)
+            return bool(audio.tags and 'covr' in audio.tags and audio.tags['covr'])
+        elif ext in ('.ogg', '.opus'):
+            audio = OggOpus(file_path) if ext == '.opus' else OggVorbis(file_path)
+            return bool('metadata_block_picture' in audio)
+    except Exception:
+        pass
+    return False
+
+
 def strip_covers_from_file(file_path):
     """Strip embedded images from an audio file (Rockbox DAP mode)."""
     ext = os.path.splitext(file_path)[1].lower()
@@ -153,6 +175,12 @@ def strip_covers_from_file(file_path):
             audio = MP4(file_path)
             if audio.tags and 'covr' in audio.tags:
                 del audio.tags['covr']
+                audio.save()
+                return True
+        elif ext in ('.ogg', '.opus'):
+            audio = OggOpus(file_path) if ext == '.opus' else OggVorbis(file_path)
+            if 'metadata_block_picture' in audio:
+                del audio['metadata_block_picture']
                 audio.save()
                 return True
     except Exception:
@@ -205,24 +233,34 @@ def process_embed_album(idx, total, album_dir):
 
 
 def process_optimize_album(idx, total, album_dir):
-    global processed_albums, updated_tracks
+    global processed_albums, updated_tracks, already_optimized_albums
 
     audio_files = [os.path.join(album_dir, f) for f in os.listdir(album_dir)
-                   if f.lower().endswith(AUDIO_EXTENSIONS)]
+                   if f.lower().endswith(AUDIO_EXTENSIONS) and os.path.isfile(os.path.join(album_dir, f)) and os.path.getsize(os.path.join(album_dir, f)) > 0]
     if not audio_files:
         return
 
-    # Ensure cover.jpg exists first
     cover_file = find_cover_image(album_dir)
+
+    # Check which tracks currently have embedded artwork
+    tracks_with_embeds = [f for f in audio_files if has_embedded_cover(f)]
+
+    # If the album already has cover.jpg and no track has embeds, it is ALREADY optimized!
+    if cover_file and not tracks_with_embeds:
+        with lock:
+            already_optimized_albums += 1
+        return
+
+    # If no cover on disk, extract from tracks that still have embeds
     if not cover_file:
         cover_out = os.path.join(album_dir, 'cover.jpg')
-        for f in audio_files:
+        for f in (tracks_with_embeds or audio_files):
             if extract_cover_from_file(f, cover_out):
                 cover_file = cover_out
                 break
 
     album_stripped = 0
-    for f in audio_files:
+    for f in tracks_with_embeds:
         if strip_covers_from_file(f):
             album_stripped += 1
 
@@ -251,7 +289,7 @@ def main():
         print("   ℹ️ No album folders found to process.")
         sys.exit(0)
 
-    action_label = "Embedding cover arts" if mode == "embed" else "Stripping embedded APIC tags (Rockbox mode)"
+    action_label = "Embedding cover arts" if mode == "embed" else "Stripping embedded covers (Rockbox mode)"
     print(f"   {action_label} across {total} album(s) using {threads} worker(s)...")
 
     worker_fn = process_embed_album if mode == "embed" else process_optimize_album
@@ -261,8 +299,10 @@ def main():
         for f in futures:
             f.result()
 
-    summary_label = "embedded" if mode == "embed" else "optimized (stripped)"
-    print(f"\n   📊 Cover art operation completed: {processed_albums} albums processed, {updated_tracks} tracks {summary_label}.")
+    if mode == "optimize":
+        print(f"\n   📊 Cover art operation completed: {processed_albums} album(s) stripped ({updated_tracks} tracks), {already_optimized_albums} album(s) were already optimized.")
+    else:
+        print(f"\n   📊 Cover art operation completed: {processed_albums} albums processed, {updated_tracks} tracks embedded.")
 
 
 if __name__ == '__main__':

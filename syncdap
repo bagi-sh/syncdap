@@ -39,12 +39,13 @@ Primary Commands & Modes:
   -e, --embed                  Embed album cover art (cover.jpg) into all audio files.
                                Alias: --embed-all, --embed-covers, --revert-optimize
   -o, --optimize               Optimize for Rockbox/DAP: deduplicate library, strip embedded covers
-                               (skipping already optimized), and sanitize Rockbox tags.
+                               (skipping already optimized), sanitize tags, and repair/clean playlists.
                                When used standalone: optimizes library. When used with URL: optimizes download.
                                Alias: --optimize-all
   --dedup                      Deduplicate audio files keeping highest quality (FLAC > M4A > MP3)
                                and synchronize playlist references.
   --fix-tags, --metadata       Audit and repair tags for Rockbox (unify ALBUM/ALBUMARTIST, remove 0-byte).
+  --repair-playlists           Audit and repair playlists (relink renamed tracks, prune truly missing).
   -g, --genres                 Enrich genre metadata album-by-album (iTunes -> Deezer -> MusicBrainz).
                                Alias: --genres-all
   -l, --lyrics                 Scan and download missing .lrc lyrics for audio tracks.
@@ -179,6 +180,10 @@ parse_arguments() {
                 STATUS_MODE=true
                 shift 1
                 ;;
+            --repair-playlists|--playlists-repair)
+                REPAIR_PLAYLISTS_MODE=true
+                shift 1
+                ;;
             -a|--all)
                 ALL_MODE=true
                 OPTIMIZE_ALL=true
@@ -302,7 +307,8 @@ parse_arguments() {
        [ "$DELETE_PLAYLIST_MODE" = false ] && [ "$PATCH_MODE" = false ] && [ "$ROMAJI_MODE" = false ] && \
        [ "$OPTIMIZE_ALL" = false ] && [ "$EMBED_ALL" = false ] && \
        [ "$GENRES_ALL" = false ] && [ "$FETCH_LYRICS" = false ] && [ "$FALLBACK_ONLY" = false ] && \
-       [ "$DEDUP_MODE" = false ] && [ "$FIX_TAGS_MODE" = false ] && [ "$STATUS_MODE" = false ] && [ -z "$CLEAN_URL" ]; then
+       [ "$DEDUP_MODE" = false ] && [ "$FIX_TAGS_MODE" = false ] && [ "$STATUS_MODE" = false ] && \
+       [ "$REPAIR_PLAYLISTS_MODE" = false ] && [ -z "$CLEAN_URL" ]; then
         echo -e "${RED}❌ Error: No valid action or URL specified.${RESET}"
         echo ""
         show_help
@@ -380,6 +386,16 @@ orchestrate_status() {
     local target_dir
     target_dir="$(resolve_music_root)"
     run_py "$SCRIPT_DIR/lib/stats.py" -r "$target_dir"
+}
+
+# --- PLAYLIST AUDIT & REPAIR ORCHESTRATION ---
+orchestrate_playlist_repair() {
+    local target_dir
+    target_dir="$(resolve_music_root)"
+    local dry_flag=""
+    [ "$DRY_RUN" = true ] && dry_flag="--dry-run"
+
+    run_py "$SCRIPT_DIR/lib/playlist_repair.py" -r "$target_dir" $dry_flag
 }
 
 # --- COVER ART ORCHESTRATION ---
@@ -509,6 +525,7 @@ main() {
         orchestrate_dedup
         orchestrate_covers "optimize" "all"
         orchestrate_rockbox_tags
+        orchestrate_playlist_repair
         cleanup_empty_dirs
         echo ""
         echo -e "${GREEN}🎉 Library optimization completed successfully!${RESET}"
@@ -532,6 +549,12 @@ main() {
     # Mode 3d: Standalone Library Status & Analytics Dashboard
     if [ "$STATUS_MODE" = true ]; then
         orchestrate_status
+        exit 0
+    fi
+
+    # Mode 3e: Standalone Playlist Audit & Repair
+    if [ "$REPAIR_PLAYLISTS_MODE" = true ]; then
+        orchestrate_playlist_repair
         exit 0
     fi
 
@@ -569,6 +592,7 @@ main() {
     if [ "$FALLBACK_ONLY" = true ]; then
         run_fallback_rescue
         orchestrate_dedup
+        orchestrate_playlist_repair
         if [ "$DO_OPTIMIZE" = true ]; then
             orchestrate_covers "optimize" "session"
             orchestrate_rockbox_tags
@@ -592,6 +616,7 @@ main() {
 
     # Ensure no duplicates remain and playlists are synchronized
     orchestrate_dedup
+    orchestrate_playlist_repair
 
     if [ "$DO_OPTIMIZE" = true ]; then
         orchestrate_covers "optimize" "session"
@@ -610,6 +635,7 @@ main() {
         echo ""
         echo -e "${CYAN}🎌 Transliterating downloaded tracks to Romaji...${RESET}"
         run_py "$SCRIPT_DIR/lib/romaji.py" -r "." -t "$THREADS" -a
+        orchestrate_playlist_repair
     fi
 
     cleanup_empty_dirs

@@ -465,6 +465,15 @@ def run_deduplication(root_dir, dry_run=False):
     print(f"\n📋 Updating playlists ({len(playlists)} found)...")
     updated_pl = update_playlists(replacements, playlists, search_dirs)
 
+    # Perform full playlist path recovery and dead link prune
+    try:
+        from playlist_repair import repair_playlists
+    except ImportError:
+        sys.path.insert(0, os.path.dirname(__file__))
+        from playlist_repair import repair_playlists
+
+    repair_playlists(root_path, dry_run=dry_run)
+
     mb_freed = total_bytes_freed / (1024 * 1024)
     mode_str = "[DRY-RUN] Would delete" if dry_run else "Successfully removed"
     print(f"\n✨ Deduplication summary: {mode_str} {total_deleted} duplicate track(s). Freed ~{mb_freed:.2f} MB. Updated {updated_pl} playlist(s).\n")

@@ -236,6 +236,11 @@ parse_arguments() {
         esac
     done
 
+    # Immediate return for update or uninstall
+    if [ "$UPDATE_MODE" = true ] || [ "$UNINSTALL_MODE" = true ]; then
+        return 0
+    fi
+
     # Resolve cross-compatible playlist target
     if [ -n "$PLAYLIST_NAME" ]; then
         if [ "$PATCH_MODE" = true ] && [ -z "$PATCH_FILTER" ]; then

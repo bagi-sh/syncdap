@@ -213,8 +213,10 @@ perform_update() {
 
 perform_uninstall() {
     echo -e "${BOLD}${YELLOW}⚠️  Uninstall syncdap${RESET}"
+    local yes_flag=""
+    [ "$ASSUME_YES" = true ] && yes_flag="-y"
     if [ -f "$SCRIPT_DIR/install.sh" ]; then
-        bash "$SCRIPT_DIR/install.sh" --uninstall
+        bash "$SCRIPT_DIR/install.sh" --uninstall $yes_flag
         exit 0
     fi
 

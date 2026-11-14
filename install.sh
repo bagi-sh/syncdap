@@ -287,9 +287,11 @@ fi
 
 echo -e "${BOLD}${GREEN}🎉 syncdap installation/update finished successfully!${RESET}"
 echo ""
-echo -e "You can now safely ${BOLD}delete${RESET} your downloaded/cloned repository directory:"
-echo -e "  rm -rf \"$SCRIPT_DIR\""
-echo ""
+if [ "$SCRIPT_DIR" != "$INSTALL_DIR" ]; then
+    echo -e "You can now safely ${BOLD}delete${RESET} your downloaded/cloned repository directory:"
+    echo -e "  rm -rf \"$SCRIPT_DIR\""
+    echo ""
+fi
 echo "Getting Started:"
 echo "  syncdap --help           # View commands and options"
 echo "  syncdap --status         # Check music library dashboard"

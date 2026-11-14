@@ -44,19 +44,50 @@ pip install mutagen pykakasi eyed3 requests
 
 ## Installation
 
-Clone the repository and ensure the executable script has execute permissions:
+Clone the repository and run the automated installer:
 
 ```bash
 git clone git@github.com:bagi-sh/syncdap.git
 cd syncdap
-chmod +x syncdap
+./install.sh
 ```
 
-Optionally, add `syncdap` to your local `PATH`:
+The installer will:
+1. Detect and install missing system tools (`ffmpeg`, `curl`, `python3`, `uv`).
+2. Pre-warm and cache Python runtime dependencies.
+3. Install the application into `~/.local/share/syncdap` (or `/usr/local/share/syncdap` with `--system`).
+4. Create the binary launcher in `~/.local/bin/syncdap`.
+5. Preserve Git repository tracking in the installed folder for future updates.
+
+Once installed, **you can safely delete the cloned repository directory**:
+```bash
+cd ..
+rm -rf syncdap
+```
+
+### Updates
+
+To update an existing installation to the latest remote version and refresh runtime dependencies, run:
 
 ```bash
-ln -s "$(pwd)/syncdap" ~/.local/bin/syncdap
+syncdap --update
 ```
+
+If you retain the repository clone (or clone it again), running the installer also performs a `git pull` and updates the tool:
+
+```bash
+./install.sh --update
+```
+
+### Uninstallation
+
+To completely remove syncdap and its launchers from your system:
+
+```bash
+syncdap --uninstall
+```
+
+Alternatively, invoke `./install.sh --uninstall`.
 
 ---
 
@@ -85,6 +116,8 @@ syncdap [COMMAND] [OPTIONS] [TARGET]
 | `-l`, `--lyrics` | None | Search and download missing timestamped `.lrc` lyric files. |
 | `-s`, `--status` | None | Display terminal dashboard with library statistics, format distribution, and health metrics. |
 | `-f`, `--fallback` | `[URL]` | Run yt-dlp fallback recovery directly, or rescue tracks from `erros.spotdl`. |
+| `--update` | None | Pull latest remote commits and update syncdap installation and dependencies. |
+| `--uninstall` | None | Completely uninstall syncdap and remove installed files and symlinks. |
 
 ### Universal Options
 
@@ -146,6 +179,7 @@ syncdap [COMMAND] [OPTIONS] [TARGET]
 ```
 syncdap/
 ├── syncdap                 # Main executable CLI coordinator (Bash)
+├── install.sh              # Standalone installer, updater, and uninstaller
 ├── src/
 │   ├── modules/            # Standalone media processing modules
 │   │   ├── covers.py       # Album artwork extraction and embedding

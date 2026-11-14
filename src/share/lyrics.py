@@ -78,3 +78,58 @@ def fetch_lyrics(artist: str, title: str, album: str = "", duration: float | Non
         pass
 
     return None
+
+
+def embed_lyrics_into_file(audio_path: str, lrc_text: str) -> bool:
+    """
+    Embed lyrics (synced or plain text) directly into audio metadata headers.
+    Supports MP3 (USLT), FLAC/OGG/OPUS (LYRICS/UNSYNCEDLYRICS), and MP4/M4A (©lyr).
+    """
+    if not os.path.isfile(audio_path) or not lrc_text or not lrc_text.strip():
+        return False
+
+    ext = os.path.splitext(audio_path)[1].lower()
+    text = lrc_text.strip()
+
+    try:
+        if ext == '.mp3':
+            from mutagen.mp3 import MP3
+            from mutagen.id3 import ID3, USLT
+            audio = MP3(audio_path, ID3=ID3)
+            if audio.tags is None:
+                audio.add_tags()
+            audio.tags.delall('USLT')
+            audio.tags.add(USLT(encoding=3, lang='eng', desc='', text=text))
+            audio.save(v2_version=3)
+            return True
+
+        elif ext == '.flac':
+            from mutagen.flac import FLAC
+            audio = FLAC(audio_path)
+            audio['lyrics'] = [text]
+            audio['unsyncedlyrics'] = [text]
+            audio.save()
+            return True
+
+        elif ext == '.m4a':
+            from mutagen.mp4 import MP4
+            audio = MP4(audio_path)
+            if audio.tags is None:
+                audio.add_tags()
+            audio.tags['\xa9lyr'] = [text]
+            audio.save()
+            return True
+
+        elif ext in ('.ogg', '.opus'):
+            import mutagen
+            audio = mutagen.File(audio_path)
+            if audio is not None and hasattr(audio, 'tags') and audio.tags is not None:
+                audio.tags['lyrics'] = [text]
+                audio.tags['unsyncedlyrics'] = [text]
+                audio.save()
+                return True
+
+    except Exception:
+        return False
+
+    return False

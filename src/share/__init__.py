@@ -21,7 +21,7 @@ from .text import (
     parse_filename_metadata,
     parse_timestamp_to_seconds,
 )
-from .lyrics import fetch_lyrics
+from .lyrics import fetch_lyrics, embed_lyrics_into_file
 from .audio import (
     find_audio_files,
     get_audio_metadata,
@@ -51,6 +51,7 @@ __all__ = [
     "parse_filename_metadata",
     "parse_timestamp_to_seconds",
     "fetch_lyrics",
+    "embed_lyrics_into_file",
     "find_audio_files",
     "get_audio_metadata",
     "has_embedded_cover_fast",

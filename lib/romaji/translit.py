@@ -6,29 +6,11 @@
 import re
 import unicodedata
 import pykakasi
+from share import AUDIO_EXTENSIONS, SYMBOL_REPLACEMENTS
+from share import sanitize_filename as base_sanitize_filename
 
 # Initialize pykakasi converter
 _kakasi = pykakasi.kakasi()
-
-# Supported audio extensions
-AUDIO_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav')
-
-# Common symbol replacements
-SYMBOL_REPLACEMENTS = {
-    '℃': 'C',
-    '℉': 'F',
-    '＆': '&',
-    '％': '%',
-    '＋': '+',
-    '・': ' ',
-    '…': '...',
-    '、': ', ',
-    '。': '',
-    '！': '!',
-    '？': '?',
-    '：': ': ',
-    '　': ' ',
-}
 
 # Japanese verb and adjective inflection endings (okurigana) that attach to kanji stems
 OKURIGANA_PATTERNS = re.compile(
@@ -87,25 +69,9 @@ def capitalize_romaji_title(text: str) -> str:
 
 def sanitize_filename(name: str, for_folder: bool = False) -> str:
     """Sanitize name for FAT32 / exFAT filesystems."""
-    if not name:
-        return name
-
-    name = unicodedata.normalize('NFKC', name)
-
-    for old_sym, new_sym in SYMBOL_REPLACEMENTS.items():
-        name = name.replace(old_sym, new_sym)
-
-    sanitized = re.sub(r'[\\/:*?"<>|]', '', name)
-    sanitized = re.sub(r'\s*-\s*', ' - ', sanitized)
-    sanitized = re.sub(r'\s+', ' ', sanitized)
-    sanitized = sanitized.strip(' .,-_')
-
-    if not sanitized:
-        return "Unknown"
-
+    sanitized = base_sanitize_filename(name)
     if for_folder:
         sanitized = capitalize_romaji_title(sanitized)
-
     return sanitized
 
 

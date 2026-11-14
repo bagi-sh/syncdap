@@ -18,6 +18,7 @@ RED="\033[1;31m"
 RESET="\033[0m"
 
 # Global state
+export PYTHONPATH="${SCRIPT_DIR}/lib:${PYTHONPATH:-}"
 MARKER=""
 TEMP_DIR=""
 RAW_URL=""
@@ -69,9 +70,23 @@ resolve_music_root() {
 # Python runner helper with mutagen, eyed3, requests, pykakasi
 run_py() {
     if command -v uv &>/dev/null; then
-        uv run --with mutagen,eyed3,requests,pykakasi python3 "$@"
+        uv run --offline --with mutagen,eyed3,requests,pykakasi python3 "$@" 2>/dev/null || \
+        uv run --with mutagen,eyed3,requests,pykakasi python3 "$@" 2>/dev/null || \
+        python3 "$@"
     else
         python3 "$@"
+    fi
+}
+
+# spotdl runner helper with automatic uv fallback
+run_spotdl() {
+    if command -v spotdl &>/dev/null; then
+        spotdl "$@"
+    elif command -v uv &>/dev/null; then
+        uv run --with spotdl spotdl "$@"
+    else
+        echo -e "${RED}❌ Error: spotdl is not installed and uv is unavailable.${RESET}" >&2
+        return 1
     fi
 }
 
@@ -98,7 +113,7 @@ setup_environment() {
 # Dependency validation
 check_dependencies() {
     echo -e "${CYAN}🔍 Checking system dependencies...${RESET}"
-    local required_deps=(spotdl yt-dlp ffmpeg python3 uv grep curl)
+    local required_deps=(yt-dlp ffmpeg python3 uv grep curl)
     local missing_deps=()
 
     for cmd in "${required_deps[@]}"; do
@@ -106,6 +121,10 @@ check_dependencies() {
             missing_deps+=("$cmd")
         fi
     done
+
+    if ! command -v spotdl &>/dev/null && ! command -v uv &>/dev/null; then
+        missing_deps+=("spotdl")
+    fi
 
     if [ ${#missing_deps[@]} -gt 0 ]; then
         echo -e "${RED}❌ Error: Missing required tools:${RESET}"

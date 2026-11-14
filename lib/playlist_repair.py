@@ -16,19 +16,12 @@ import argparse
 from collections import defaultdict
 from pathlib import Path
 
-AUDIO_EXTENSIONS = ('.flac', '.wav', '.m4a', '.opus', '.ogg', '.mp3')
-IGNORED_DIRS = {
-    'lost.dir', '.trash-1000', '.trash', 'system volume information',
-    '.android_secure', '.rockbox', 'backup', '__pycache__'
-}
-
-
-def norm_str(s):
-    """Normalize string for fuzzy comparison."""
-    if not s:
-        return ""
-    s = s.lower().strip()
-    return re.sub(r'[^\w]', '', s)
+from share import (
+    AUDIO_EXTENSIONS,
+    IGNORED_DIRS,
+    normalize_str as norm_str,
+    get_all_playlist_files as find_all_playlists,
+)
 
 
 def build_library_index(music_dir):
@@ -151,20 +144,6 @@ def resolve_playlist_entry(raw_path, pl_path, index):
         return index['by_norm_fn'][n_fn][0], 'global_fn_match'
 
     return None, 'not_found'
-
-
-def find_all_playlists(search_dirs):
-    """Find all .m3u and .m3u8 files in specified directory trees."""
-    playlists = set()
-    for d in search_dirs:
-        if not d or not os.path.isdir(d):
-            continue
-        for root, dirs, files in os.walk(d):
-            dirs[:] = [sub for sub in dirs if sub.lower() not in IGNORED_DIRS and not sub.startswith('.Trash')]
-            for f in files:
-                if f.lower().endswith(('.m3u8', '.m3u')):
-                    playlists.add(os.path.abspath(os.path.join(root, f)))
-    return sorted(list(playlists))
 
 
 def repair_playlists(root_dir, dry_run=False):

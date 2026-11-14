@@ -17,12 +17,12 @@ from mutagen.mp4 import MP4, MP4Cover
 from mutagen.oggvorbis import OggVorbis
 from mutagen.oggopus import OggOpus
 
+from share import AUDIO_EXTENSIONS
+
 lock = threading.Lock()
 processed_albums = 0
 updated_tracks = 0
 already_optimized_albums = 0
-
-AUDIO_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav')
 
 
 def find_cover_image(album_dir):

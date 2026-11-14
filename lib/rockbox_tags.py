@@ -23,58 +23,12 @@ from mutagen.mp4 import MP4
 from mutagen.oggvorbis import OggVorbis
 from mutagen.oggopus import OggOpus
 
-AUDIO_EXTENSIONS = ('.flac', '.wav', '.m4a', '.opus', '.ogg', '.mp3')
-IGNORED_DIRS = {
-    'lost.dir', '.trash-1000', '.trash', 'system volume information',
-    '.android_secure', '.rockbox', 'backup', '__pycache__'
-}
-
-
-def clean_string(val):
-    """Normalize string, stripping whitespace and control characters."""
-    if val is None:
-        return ""
-    if isinstance(val, (list, tuple)):
-        val = str(val[0]) if val else ""
-    s = str(val).strip()
-    s = re.sub(r'[\x00-\x1f\x7f]', '', s)
-    s = re.sub(r'\s+', ' ', s)
-    return s.strip()
-
-
-def parse_filename_metadata(file_path):
-    """Extract fallback track_num, title, and artist from filename."""
-    base = os.path.splitext(os.path.basename(file_path))[0]
-    parent = os.path.basename(os.path.dirname(os.path.abspath(file_path)))
-    grandparent = os.path.basename(os.path.dirname(os.path.dirname(os.path.abspath(file_path))))
-
-    track_num = ""
-    title = base
-    artist = grandparent if grandparent and grandparent != '.' else ""
-    album = parent if parent and parent != '.' else ""
-
-    # Check pattern: "01 Title - Artist" or "01. Title"
-    match = re.match(r'^(\d+)\s*[-._\s]\s*(.*)$', base)
-    if match:
-        track_num = str(int(match.group(1)))
-        rest = match.group(2).strip()
-        if ' - ' in rest:
-            parts = rest.split(' - ')
-            title = ' - '.join(parts[:-1]).strip()
-            artist = parts[-1].strip()
-        else:
-            title = rest
-    elif ' - ' in base:
-        parts = base.split(' - ')
-        title = ' - '.join(parts[:-1]).strip()
-        artist = parts[-1].strip()
-
-    return {
-        'track_num': track_num,
-        'title': clean_string(title),
-        'artist': clean_string(artist),
-        'album': clean_string(album)
-    }
+from share import (
+    AUDIO_EXTENSIONS,
+    IGNORED_DIRS,
+    clean_string,
+    parse_filename_metadata,
+)
 
 
 def read_track_metadata(file_path):

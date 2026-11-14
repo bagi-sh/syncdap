@@ -12,7 +12,7 @@ run_fallback_rescue() {
     if [ "$FALLBACK_ONLY" = true ] && [ -n "$CLEAN_URL" ]; then
         echo ""
         echo -e "${CYAN}⚡ Fallback mode: Fetching Spotify metadata...${RESET}"
-        spotdl save "$CLEAN_URL" --save-file "$batch_meta" >/dev/null 2>&1 || true
+        run_spotdl save "$CLEAN_URL" --save-file "$batch_meta" >/dev/null 2>&1 || true
         [ -s "$batch_meta" ] && has_targets=true
     elif [ -s "erros.spotdl" ]; then
         echo ""
@@ -21,7 +21,7 @@ run_fallback_rescue() {
         if [ ${#failed_urls[@]} -gt 0 ]; then
             echo "   Found ${#failed_urls[@]} track(s) for recovery."
             echo "   Fetching official metadata from Spotify..."
-            spotdl save "${failed_urls[@]}" --save-file "$batch_meta" >/dev/null 2>&1 || true
+            run_spotdl save "${failed_urls[@]}" --save-file "$batch_meta" >/dev/null 2>&1 || true
             [ -s "$batch_meta" ] && has_targets=true
         fi
     fi

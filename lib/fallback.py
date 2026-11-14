@@ -21,71 +21,13 @@ from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TIT2, TPE1, TALB, TRCK, TDRC, TCON, APIC, COMM
 from mutagen.mp4 import MP4, MP4Cover
 
+from share import fetch_lyrics, sanitize_filename
+
 lock = threading.Lock()
 
 
 def sanitize(name):
-    return str(name or '').replace('/', '-').replace('\\', '-').replace('|', '-').strip()
-
-
-def fetch_lyrics(artist, title, album, duration, out_path, synced_only=False):
-    params = {'artist_name': artist, 'track_name': title}
-    if album:
-        params['album_name'] = album
-    if duration:
-        params['duration'] = round(duration)
-
-    try:
-        url = 'https://lrclib.net/api/get?' + urllib.parse.urlencode(params)
-        req = urllib.request.Request(url, headers={'User-Agent': 'MusicLyricsFetcher/1.0'})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            d = json.loads(resp.read().decode('utf-8'))
-            synced = d.get('syncedLyrics')
-            plain = d.get('plainLyrics')
-            if synced:
-                with open(out_path, 'w', encoding='utf-8') as f:
-                    f.write(synced.strip() + '\n')
-                return True
-            elif not synced_only and plain:
-                with open(out_path, 'w', encoding='utf-8') as f:
-                    f.write(plain.strip() + '\n')
-                return True
-    except Exception:
-        pass
-
-    try:
-        q = f"{artist} {title}"
-        url_search = 'https://lrclib.net/api/search?' + urllib.parse.urlencode({'q': q})
-        req_search = urllib.request.Request(url_search, headers={'User-Agent': 'MusicLyricsFetcher/1.0'})
-        with urllib.request.urlopen(req_search, timeout=5) as resp:
-            results = json.loads(resp.read().decode('utf-8'))
-            for r in results:
-                synced = r.get('syncedLyrics')
-                if synced:
-                    with open(out_path, 'w', encoding='utf-8') as f:
-                        f.write(synced.strip() + '\n')
-                    return True
-            if not synced_only:
-                for r in results:
-                    plain = r.get('plainLyrics')
-                    if plain:
-                        with open(out_path, 'w', encoding='utf-8') as f:
-                            f.write(plain.strip() + '\n')
-                        return True
-    except Exception:
-        pass
-
-    try:
-        cmd = ['syncedlyrics', f"{artist} - {title}", '-o', out_path]
-        if synced_only:
-            cmd.append('--synced-only')
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
-        if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
-            return True
-    except Exception:
-        pass
-
-    return False
+    return sanitize_filename(name)
 
 
 def tag_audio_file(file_path, artist, album, title, track_num, tracks_count, year, genre, cover_jpg):

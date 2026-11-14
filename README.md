@@ -147,6 +147,7 @@ syncdap [COMMAND] [OPTIONS] [TARGET]
 syncdap/
 ├── syncdap                 # Main executable CLI coordinator (Bash)
 ├── syncdap.sh              # Compatibility symlink
+├── share/                  # Root symlink to lib/share
 ├── lib/
 │   ├── sh/                 # Shell modules
 │   │   ├── cli.sh          # CLI argument parsing and help output
@@ -154,6 +155,12 @@ syncdap/
 │   │   ├── downloader.sh   # spotDL orchestration
 │   │   ├── orchestrator.sh # Submodule execution dispatchers
 │   │   └── playlists.sh    # Post-download playlist path normalization
+│   ├── share/              # Core shared utilities and constants
+│   │   ├── constants.py    # Audio formats, lossless/lossy sets, ignored folders
+│   │   ├── text.py         # Normalization, string sanitization, filename parsing
+│   │   ├── lyrics.py       # Shared LRCLIB and syncedlyrics query provider
+│   │   ├── audio.py        # Mutagen metadata inspection, library walking
+│   │   └── playlists.py    # Common playlist candidate search & path mapping
 │   ├── romaji/             # Japanese transliteration package
 │   │   ├── translit.py     # Kakasi Hepburn romanization, title casing, FAT32 sanitization
 │   │   ├── tags.py         # ID3, Vorbis, and MP4 tag transliteration

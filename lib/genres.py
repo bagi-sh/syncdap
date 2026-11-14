@@ -22,7 +22,7 @@ from mutagen.mp4 import MP4
 from mutagen.oggvorbis import OggVorbis
 from mutagen.oggopus import OggOpus
 
-AUDIO_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav')
+from share import AUDIO_EXTENSIONS, clean_term
 
 album_genre_cache = {}
 artist_genre_cache = {}
@@ -32,14 +32,6 @@ updated_albums = 0
 already_set_albums = 0
 not_found_albums = 0
 total_tracks_updated = 0
-
-
-def clean_term(s):
-    if not s:
-        return ""
-    s = s.replace('\u3000', ' ')
-    s = re.sub(r'\(.*?\)|\[.*?\]', '', s)
-    return ' '.join(s.split())
 
 
 def itunes_genre(artist, album):

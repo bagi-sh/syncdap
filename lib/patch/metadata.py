@@ -9,6 +9,7 @@ from mutagen.flac import FLAC, Picture
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TIT2, TPE1, TALB, TRCK, TDRC, TCON, APIC
 from mutagen.mp4 import MP4, MP4Cover
+from share import parse_filename_metadata
 
 
 def extract_metadata_from_file(file_path):
@@ -72,22 +73,12 @@ def extract_metadata_from_file(file_path):
     except Exception:
         pass
 
-    if not meta['title'] or not meta['artist']:
-        base = os.path.splitext(os.path.basename(file_path))[0]
-        if ' - ' in base:
-            parts = base.split(' - ')
-            meta['artist'] = parts[-1].strip()
-            title_part = ' - '.join(parts[:-1]).strip()
-            if ' ' in title_part and title_part.split(' ')[0].isdigit():
-                meta['track_num'] = title_part.split(' ')[0]
-                meta['title'] = ' '.join(title_part.split(' ')[1:]).strip()
-            else:
-                meta['title'] = title_part
-
-    if not meta['album']:
-        parent = os.path.basename(os.path.dirname(os.path.abspath(file_path)))
-        if parent and parent != '.':
-            meta['album'] = parent
+    if not meta['title'] or not meta['artist'] or not meta['album']:
+        fn_meta = parse_filename_metadata(file_path)
+        meta['title'] = meta['title'] or fn_meta['title']
+        meta['artist'] = meta['artist'] or fn_meta['artist']
+        meta['album'] = meta['album'] or fn_meta['album']
+        meta['track_num'] = meta['track_num'] or fn_meta['track_no']
 
     return meta
 

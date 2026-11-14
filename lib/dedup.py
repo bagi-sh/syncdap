@@ -22,21 +22,14 @@ from mutagen.oggvorbis import OggVorbis
 from mutagen.oggopus import OggOpus
 from mutagen.wave import WAVE
 
-AUDIO_EXTENSIONS = ('.flac', '.wav', '.m4a', '.opus', '.ogg', '.mp3')
-IGNORED_DIRS = {
-    'lost.dir', '.trash-1000', '.trash', 'system volume information',
-    '.android_secure', '.rockbox', 'backup', '__pycache__'
-}
-
-
-def normalize_str(s):
-    if not s:
-        return ""
-    # Strip whitespace, lower case, remove punctuation for loose matching
-    s = s.lower().strip()
-    s = re.sub(r'[\s_\-]+', ' ', s)
-    s = re.sub(r'[^\w\s]', '', s)
-    return s.strip()
+from share import (
+    AUDIO_EXTENSIONS,
+    IGNORED_DIRS,
+    normalize_str,
+    find_audio_files,
+    parse_filename_metadata as extract_track_info,
+    get_all_playlist_files as find_playlist_files,
+)
 
 
 def get_audio_quality_score(file_path):
@@ -122,67 +115,6 @@ def get_audio_quality_score(file_path):
     return 50, f"fallback {ext}"
 
 
-def find_audio_files(root_dir):
-    """Scan root_dir recursively for audio files excluding ignored system directories."""
-    audio_files = []
-    root_path = os.path.abspath(root_dir)
-
-    for dirpath, dirnames, filenames in os.walk(root_path):
-        # Filter ignored directories in-place
-        dirnames[:] = [d for d in dirnames if d.lower() not in IGNORED_DIRS and not d.startswith('.Trash')]
-
-        for f in filenames:
-            ext = os.path.splitext(f)[1].lower()
-            if ext in AUDIO_EXTENSIONS:
-                audio_files.append(os.path.join(dirpath, f))
-
-    return audio_files
-
-
-def extract_track_info(file_path):
-    """Extract basic identifiers (track number, title, artist, album, stem) from audio file."""
-    base_name = os.path.basename(file_path)
-    stem, ext = os.path.splitext(base_name)
-    parent_dir = os.path.dirname(os.path.abspath(file_path))
-    album_dir = os.path.basename(parent_dir)
-    artist_dir = os.path.basename(os.path.dirname(parent_dir))
-
-    track_no = ""
-    title = ""
-    artist = ""
-    album = ""
-
-    # Parse filename heuristic: "01 Title - Artist" or "01 - Title"
-    match = re.match(r'^(\d+)\s*[-._\s]\s*(.*)$', stem)
-    if match:
-        track_no = str(int(match.group(1)))
-        rest = match.group(2).strip()
-        if ' - ' in rest:
-            parts = rest.split(' - ')
-            title = ' - '.join(parts[:-1]).strip()
-            artist = parts[-1].strip()
-        else:
-            title = rest
-    elif ' - ' in stem:
-        parts = stem.split(' - ')
-        title = ' - '.join(parts[:-1]).strip()
-        artist = parts[-1].strip()
-    else:
-        title = stem
-
-    return {
-        'path': file_path,
-        'stem': stem,
-        'ext': ext.lower(),
-        'parent_dir': parent_dir,
-        'album_dir': album_dir,
-        'artist_dir': artist_dir,
-        'track_no': track_no,
-        'title': title,
-        'artist': artist
-    }
-
-
 def group_duplicates(audio_files):
     """
     Group audio files that represent the same track.
@@ -227,33 +159,6 @@ def group_duplicates(audio_files):
                 all_groups.append(group)
 
     return all_groups
-
-
-def find_playlist_files(search_roots):
-    """Find all .m3u and .m3u8 playlists across candidate directories."""
-    playlist_files = set()
-
-    for r in search_roots:
-        if not r or not os.path.exists(r):
-            continue
-        r = os.path.abspath(r)
-
-        # Check candidate locations
-        dirs_to_check = [
-            r,
-            os.path.join(r, 'Playlists'),
-            os.path.join(r, 'playlists'),
-            os.path.join(os.path.dirname(r), 'Playlists'),
-            os.path.join(os.path.dirname(r), 'playlists'),
-        ]
-
-        for d in dirs_to_check:
-            if os.path.isdir(d):
-                for f in os.listdir(d):
-                    if f.lower().endswith(('.m3u8', '.m3u')):
-                        playlist_files.add(os.path.abspath(os.path.join(d, f)))
-
-    return sorted(list(playlist_files))
 
 
 def resolve_playlist_line(line, pl_dir, music_roots):

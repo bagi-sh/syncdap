@@ -4,7 +4,7 @@
 # ==============================================================================
 
 import os
-from playlists.core import resolve_track_file
+from share import resolve_track_file
 
 
 def update_playlists(old_rel_path, new_rel_path):

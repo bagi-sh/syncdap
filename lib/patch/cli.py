@@ -8,7 +8,7 @@ import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from playlists.core import find_playlist_file, AUDIO_EXTENSIONS
+from share import find_playlist_file, AUDIO_EXTENSIONS
 from .playlist import handle_playlist_patch
 from .worker import upgrade_track
 

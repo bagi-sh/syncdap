@@ -21,12 +21,9 @@ from mutagen.mp4 import MP4
 from mutagen.oggvorbis import OggVorbis
 from mutagen.oggopus import OggOpus
 
-AUDIO_EXTENSIONS = ('.flac', '.wav', '.m4a', '.opus', '.ogg', '.mp3')
+from share import AUDIO_EXTENSIONS, IGNORED_DIRS, has_embedded_cover_fast
+
 COVER_NAMES = ('cover.jpg', 'cover.jpeg', 'cover.png', 'folder.jpg', 'folder.jpeg', 'folder.png')
-IGNORED_DIRS = {
-    'lost.dir', '.trash-1000', '.trash', 'system volume information',
-    '.android_secure', '.rockbox', 'backup', '__pycache__'
-}
 
 # ANSI Colors
 BOLD = "\033[1m"
@@ -53,23 +50,6 @@ def make_bar(percent, width=20, fill_color=GREEN):
     filled = int(round(width * (percent / 100.0)))
     empty = width - filled
     return f"{fill_color}{'█' * filled}{DIM}{'░' * empty}{RESET} {percent:5.1f}%"
-
-
-def has_embedded_cover_fast(audio, ext):
-    try:
-        if ext == '.mp3':
-            tags = getattr(audio, 'tags', None)
-            return bool(tags and any(isinstance(t, APIC) for t in tags.values()))
-        elif ext == '.flac':
-            return bool(getattr(audio, 'pictures', []))
-        elif ext == '.m4a':
-            tags = getattr(audio, 'tags', None)
-            return bool(tags and 'covr' in tags and tags['covr'])
-        elif ext in ('.ogg', '.opus'):
-            return bool('metadata_block_picture' in audio)
-    except Exception:
-        pass
-    return False
 
 
 def check_lrc_synced(lrc_path):

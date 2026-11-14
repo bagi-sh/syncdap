@@ -19,7 +19,8 @@ run_spotdl_download() {
     fi
 
     local spotdl_cmd=(
-        spotdl "$CLEAN_URL"
+        run_spotdl
+        "$CLEAN_URL"
         "${SPOTDL_FORMAT_ARGS[@]}"
         --threads "$THREADS"
         --output "{artist}/{album}/{track-number} {title} - {artist}.{output-ext}"

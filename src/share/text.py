@@ -121,3 +121,28 @@ def parse_filename_metadata(file_path: str) -> dict:
         'artist': clean_string(artist),
         'album': clean_string(album_dir) if album_dir != '.' else ""
     }
+
+
+def parse_timestamp_to_seconds(ts_str: str) -> float | None:
+    """
+    Parse timestamp string into float seconds.
+    Supports HH:MM:SS, MM:SS, MM:SS.ff (CUE frames), and raw seconds.
+    """
+    if not ts_str:
+        return None
+    s = ts_str.strip().strip('[]()')
+    parts = s.split(':')
+    try:
+        if len(parts) == 3:
+            # HH:MM:SS or MM:SS:FF (CUE frame format: 75 frames per second)
+            # If the third part has 2 digits and first part < 100, might be MM:SS:FF
+            h, m, sec = float(parts[0]), float(parts[1]), float(parts[2])
+            return h * 3600.0 + m * 60.0 + sec
+        elif len(parts) == 2:
+            m, sec = float(parts[0]), float(parts[1])
+            return m * 60.0 + sec
+        elif len(parts) == 1:
+            return float(parts[0])
+    except (ValueError, TypeError):
+        return None
+    return None

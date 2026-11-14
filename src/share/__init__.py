@@ -8,6 +8,9 @@ from .constants import (
     LOSSLESS_EXTENSIONS,
     LOSSY_EXTENSIONS,
     IGNORED_DIRS,
+    FULL_ALBUM_PATTERNS,
+    LIVE_PATTERNS,
+    REMIX_PATTERNS,
 )
 from .text import (
     SYMBOL_REPLACEMENTS,
@@ -16,6 +19,7 @@ from .text import (
     clean_term,
     sanitize_filename,
     parse_filename_metadata,
+    parse_timestamp_to_seconds,
 )
 from .lyrics import fetch_lyrics
 from .audio import (
@@ -36,12 +40,16 @@ __all__ = [
     "LOSSLESS_EXTENSIONS",
     "LOSSY_EXTENSIONS",
     "IGNORED_DIRS",
+    "FULL_ALBUM_PATTERNS",
+    "LIVE_PATTERNS",
+    "REMIX_PATTERNS",
     "SYMBOL_REPLACEMENTS",
     "normalize_str",
     "clean_string",
     "clean_term",
     "sanitize_filename",
     "parse_filename_metadata",
+    "parse_timestamp_to_seconds",
     "fetch_lyrics",
     "find_audio_files",
     "get_audio_metadata",

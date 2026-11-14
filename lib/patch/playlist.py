@@ -1,0 +1,121 @@
+# ==============================================================================
+# Module: lib/patch/playlist.py
+# Purpose: Playlist inspection and track path synchronization for patch mode
+# ==============================================================================
+
+import os
+from playlists.core import resolve_track_file
+
+
+def update_playlists(old_rel_path, new_rel_path):
+    """Replace references from old_rel_path to new_rel_path in all .m3u8 and .m3u files."""
+    candidate_dirs = []
+    if os.path.isdir('../Playlists'):
+        candidate_dirs.append('../Playlists')
+    if os.path.isdir('Playlists'):
+        candidate_dirs.append('Playlists')
+    home_pl = os.path.expanduser('~/Playlists')
+    if os.path.isdir(home_pl) and os.path.abspath(home_pl) not in [os.path.abspath(d) for d in candidate_dirs]:
+        candidate_dirs.append(home_pl)
+
+    if not candidate_dirs:
+        return
+
+    old_norm = os.path.normpath(old_rel_path)
+    new_norm = os.path.normpath(new_rel_path)
+
+    for pdir in candidate_dirs:
+        for pfile in os.listdir(pdir):
+            if pfile.lower().endswith(('.m3u8', '.m3u')):
+                pl_path = os.path.join(pdir, pfile)
+                try:
+                    with open(pl_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+
+                    changed = False
+                    if f"../Music/{old_norm}" in content:
+                        content = content.replace(f"../Music/{old_norm}", f"../Music/{new_norm}")
+                        changed = True
+                    if f"../{old_norm}" in content:
+                        content = content.replace(f"../{old_norm}", f"../{new_norm}")
+                        changed = True
+                    if old_norm in content:
+                        content = content.replace(old_norm, new_norm)
+                        changed = True
+
+                    if changed:
+                        with open(pl_path, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                except Exception:
+                    pass
+
+
+def handle_playlist_patch(pl_path, target_format, keep_old, dry_run, temp_dir, js_args, threads, assume_yes):
+    """Scan and patch tracks referenced by a specific playlist file."""
+    print(f"\n📋 Playlist mode: Inspecting entries in '{os.path.basename(pl_path)}'...")
+    pl_dir = os.path.dirname(os.path.abspath(pl_path))
+
+    target_ext = f".{target_format.lower()}"
+    files_to_upgrade = []
+
+    lines_to_remove = set()
+    album_clean_decisions = {}
+    artist_clean_decisions = {}
+    all_keep = assume_yes
+
+    with open(pl_path, 'r', encoding='utf-8', errors='ignore') as f:
+        playlist_lines = f.readlines()
+
+    for line in playlist_lines:
+        s = line.strip()
+        if not s or s.startswith('#'):
+            continue
+
+        resolved = resolve_track_file(s, pl_dir)
+        if os.path.isfile(resolved):
+            ext = os.path.splitext(resolved)[1].lower()
+            if ext != target_ext:
+                files_to_upgrade.append(os.path.relpath(resolved, '.'))
+            else:
+                print(f"   ⏩ Already in {target_format.upper()}: {os.path.basename(resolved)}")
+        else:
+            print(f"\n   ⚠️ Audio file for '{s}' does not exist on disk.")
+            track_album = os.path.dirname(os.path.abspath(resolved))
+            track_artist = os.path.dirname(track_album)
+
+            remove_entry = False
+            if all_keep:
+                remove_entry = False
+            elif track_artist in artist_clean_decisions:
+                remove_entry = artist_clean_decisions[track_artist]
+            elif track_album in album_clean_decisions:
+                remove_entry = album_clean_decisions[track_album]
+            else:
+                print(f"      Expected folder: {track_album}")
+                print("      Options: [y] Remove from playlist | [n] Keep in playlist | [a] Entire album | [r] Entire artist | [k] Keep all remaining")
+                ans = input("      Remove this entry from the playlist? [y/N]: ").strip().lower()
+
+                if ans in ('y', 'yes', 's', 'sim'):
+                    remove_entry = True
+                elif ans in ('a', 'album'):
+                    album_clean_decisions[track_album] = True
+                    remove_entry = True
+                elif ans in ('r', 'artist', 'artista'):
+                    artist_clean_decisions[track_artist] = True
+                    remove_entry = True
+                elif ans in ('k', 'keep', 't', 'all'):
+                    all_keep = True
+                    remove_entry = False
+                else:
+                    remove_entry = False
+
+            if remove_entry:
+                lines_to_remove.add(line)
+
+    if lines_to_remove:
+        new_lines = [l for l in playlist_lines if l not in lines_to_remove]
+        with open(pl_path, 'w', encoding='utf-8') as f:
+            f.writelines(new_lines)
+        print(f"   🧹 {len(lines_to_remove)} missing entry(ies) removed from '{os.path.basename(pl_path)}'.")
+
+    return sorted(list(set(files_to_upgrade)))

@@ -57,6 +57,8 @@ STATUS_MODE=false
 REPAIR_PLAYLISTS_MODE=false
 TARGET_M3U=""
 YTDLP_JS_ARGS=()
+UPDATE_MODE=false
+UNINSTALL_MODE=false
 
 resolve_music_root() {
     local base="${TARGET_ROOT:-.}"
@@ -187,4 +189,56 @@ validate_format() {
 # Cleanup empty residual directories
 cleanup_empty_dirs() {
     find . -mindepth 1 -type d -empty ! -path "./Playlists*" -delete 2>/dev/null || true
+}
+
+# --- UPDATE & UNINSTALL HANDLERS ---
+perform_update() {
+    echo -e "${BOLD}${BLUE}🔄 Checking for syncdap updates...${RESET}"
+    if [ -f "$SCRIPT_DIR/install.sh" ]; then
+        bash "$SCRIPT_DIR/install.sh" --update
+    elif [ -d "$SCRIPT_DIR/.git" ]; then
+        echo -e "${CYAN}📥 Pulling latest commits from git repository...${RESET}"
+        git -C "$SCRIPT_DIR" pull --rebase
+        if command -v uv &>/dev/null; then
+            echo -e "${CYAN}⚡ Refreshing Python dependencies cache...${RESET}"
+            uv run --with mutagen,eyed3,requests,pykakasi,syncedlyrics python3 -c "import mutagen, eyed3, requests, pykakasi; print('✅ Dependencies updated')" 2>/dev/null || true
+        fi
+        echo -e "${GREEN}✅ syncdap updated successfully!${RESET}"
+    else
+        echo -e "${RED}❌ Error: Cannot update. No git repository or install.sh found in $SCRIPT_DIR.${RESET}"
+        exit 1
+    fi
+    exit 0
+}
+
+perform_uninstall() {
+    echo -e "${BOLD}${YELLOW}⚠️  Uninstall syncdap${RESET}"
+    if [ -f "$SCRIPT_DIR/install.sh" ]; then
+        bash "$SCRIPT_DIR/install.sh" --uninstall
+        exit 0
+    fi
+
+    local target_bin
+    target_bin="$(command -v syncdap 2>/dev/null || true)"
+    echo -e "${YELLOW}This will remove syncdap from your system.${RESET}"
+    if [ "$ASSUME_YES" != true ]; then
+        read -rp "Are you sure you want to uninstall syncdap? [y/N]: " confirm
+        case "$confirm" in
+            [yY][eE][sS]|[yY]) ;;
+            *) echo "Uninstallation aborted."; exit 0 ;;
+        esac
+    fi
+
+    if [ -n "$target_bin" ] && [ -L "$target_bin" ]; then
+        echo "Removing launcher: $target_bin"
+        rm -f "$target_bin"
+    fi
+
+    if [ -d "$SCRIPT_DIR" ] && [[ "$SCRIPT_DIR" == *"/syncdap"* ]]; then
+        echo "Removing installation files: $SCRIPT_DIR"
+        rm -rf "$SCRIPT_DIR"
+    fi
+
+    echo -e "${GREEN}✅ syncdap has been completely uninstalled.${RESET}"
+    exit 0
 }

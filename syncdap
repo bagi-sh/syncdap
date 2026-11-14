@@ -20,6 +20,17 @@ source "$SCRIPT_DIR/src/sh/orchestrator.sh"
 # --- MAIN ORCHESTRATION ---
 main() {
     parse_arguments "$@"
+
+    # Mode: Update syncdap
+    if [ "$UPDATE_MODE" = true ]; then
+        perform_update
+    fi
+
+    # Mode: Uninstall syncdap
+    if [ "$UNINSTALL_MODE" = true ]; then
+        perform_uninstall
+    fi
+
     check_dependencies
     setup_environment
 

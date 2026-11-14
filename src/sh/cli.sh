@@ -41,6 +41,8 @@ Primary Commands & Modes:
   -f, --fallback [URL]         Direct yt-dlp rescue with metadata, cover art, and lyrics.
                                If no URL is given: rescues failed tracks from 'erros.spotdl'.
                                Alias: --fallback-only
+  --update                     Update syncdap to the latest git commits and refresh dependencies.
+  --desinstall, --uninstall    Completely uninstall syncdap and remove installed files and symlinks.
 
 Universal & Compatible Options (Work across multiple commands):
   -a, --all                    Apply command to entire music library (romaji, patch, embed, optimize, genres, lyrics).
@@ -85,6 +87,14 @@ parse_arguments() {
             -h|--help)
                 show_help
                 exit 0
+                ;;
+            --update)
+                UPDATE_MODE=true
+                shift 1
+                ;;
+            --desinstall|--uninstall)
+                UNINSTALL_MODE=true
+                shift 1
                 ;;
             -F|--format)
                 if [[ $# -lt 2 ]] || [[ "$2" =~ ^- ]]; then

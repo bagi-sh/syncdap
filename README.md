@@ -1,50 +1,45 @@
 # syncdap
 
-A command-line music library manager and Spotify synchronization tool designed for Digital Audio Players (DAPs), with dedicated optimizations for Rockbox firmware and FAT32 filesystems.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Rockbox/rockbox/master/rblogo.svg" alt="Rockbox Logo" width="80" height="80" />
+</p>
+
+<p align="center">
+  <strong>Music library management and synchronization tool focused on Rockbox and Digital Audio Players (DAPs).</strong>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv2-blue.svg?style=flat-square" alt="License: GPL v2" /></a>
+  <img src="https://img.shields.io/badge/python-3.10+-3776AB.svg?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+" />
+  <img src="https://img.shields.io/badge/bash-4.0+-4EAA25.svg?style=flat-square&logo=gnu-bash&logoColor=white" alt="Bash 4.0+" />
+  <img src="https://img.shields.io/badge/platform-Linux-FCC624.svg?style=flat-square&logo=linux&logoColor=black" alt="Platform: Linux" />
+  <img src="https://img.shields.io/badge/firmware-Rockbox-0080FF.svg?style=flat-square" alt="Firmware: Rockbox" />
+  <img src="https://img.shields.io/badge/powered%20by-uv-DE5FE9.svg?style=flat-square" alt="Astral uv" />
+</p>
+
+---
 
 ## Overview
 
-`syncdap` automates the ingestion, audio transcoding, metadata sanitization, and playlist maintenance required when syncing modern streaming libraries to portable hardware players.
+`syncdap` automates audio downloading, transcoding, metadata sanitization, and playlist maintenance when syncing streaming libraries to portable hardware players. It is purpose-built to address hardware and firmware constraints common to Rockbox, iPods, and FAT32/exFAT storage volumes.
 
-Key functional areas:
-- **Download & Recovery:** Fetch tracks, albums, and playlists via spotDL with automated yt-dlp fallback recovery.
-- **Format Patching:** In-place library audio format switching (e.g. MP3 to FLAC) while preserving tags, track numbers, and playlist links.
-- **Rockbox & DAP Optimization:** Strip bloated embedded album artwork into standard directory-level `cover.jpg` files, normalize `ALBUMARTIST` tags to avoid split albums, and sanitize FAT32 file paths.
-- **Japanese Transliteration (Romaji):** Convert Kanji, Hiragana, and Katakana tags, folder trees, filenames, and `.lrc` lyrics to Hepburn Romaji.
-- **Playlist Maintenance:** Relink renamed tracks, prune dead file references, merge playlists, and manage M3U8 files interactively or headlessly.
-- **Deduplication & Diagnostics:** Identify duplicate tracks across formats, score by audio fidelity (FLAC > WAV > M4A > OPUS > OGG > MP3), and report library health statistics.
+### Key Capabilities
 
----
-
-## Requirements
-
-### System Dependencies
-
-Ensure the following tools are installed and accessible in your `PATH`:
-- `bash` (4.0+)
-- `python3` (3.10+)
-- `uv` (recommended for automatic Python dependency resolution)
-- `ffmpeg`
-- `yt-dlp`
-- `spotdl`
-- `curl`
-
-Optional:
-- `fzf` (enables interactive fuzzy menus for playlist management)
-- `nodejs` (provides yt-dlp JavaScript challenge solver)
-
-### Python Dependencies
-
-When `uv` is installed, dependencies are isolated and fetched on-the-fly. If running standard Python directly, install:
-```bash
-pip install mutagen pykakasi eyed3 requests
-```
+- **Automated Downloads & Stream Rescue**: Ingest tracks, albums, and playlists via spotDL with automated yt-dlp metadata and stream rescue.
+- **In-Place Quality Patching**: Seamlessly switch audio formats (e.g., MP3 to FLAC) while preserving ID3/Vorbis tags, track positions, and playlist integrity.
+- **Rockbox & DAP Optimization**: Strip heavy embedded album artwork into lightweight directory-level `cover.jpg` files, unify `ALBUMARTIST` tags to prevent split albums, and sanitize FAT32 path lengths.
+- **Japanese Transliteration (Hepburn Romaji)**: Convert Japanese Kanji, Hiragana, and Katakana tags, folder trees, filenames, and `.lrc` synced lyrics to Hepburn Romaji.
+- **Playlist Health & Repair**: Relink moved or renamed audio files, prune dead entries, merge playlists, and manage tracks with interactive terminal menus.
+- **Fidelity Deduplication**: Detect duplicate tracks across formats and automatically keep the highest audio quality (FLAC > WAV > M4A > OPUS > OGG > MP3).
+- **Diagnostics & Metrics**: Generate comprehensive library health reports, format distributions, and storage analytics.
 
 ---
 
-## Installation
+## Quick Start
 
-Clone the repository and run the automated installer:
+### Installation
+
+Clone the repository and run the standalone installer:
 
 ```bash
 git clone git@github.com:bagi-sh/syncdap.git
@@ -52,42 +47,30 @@ cd syncdap
 ./install.sh
 ```
 
-The installer will:
-1. Detect and install missing system tools (`ffmpeg`, `curl`, `python3`, `uv`).
-2. Pre-warm and cache Python runtime dependencies.
-3. Install the application into `~/.local/share/syncdap` (or `/usr/local/share/syncdap` with `--system`).
-4. Create the binary launcher in `~/.local/bin/syncdap`.
-5. Preserve Git repository tracking in the installed folder for future updates.
+The installer verifies system dependencies (`ffmpeg`, `curl`, `python3`, `uv`), caches required wheels, installs the tool to `~/.local/share/syncdap`, and links the launcher to `~/.local/bin/syncdap`.
 
-Once installed, **you can safely delete the cloned repository directory**:
-```bash
-cd ..
-rm -rf syncdap
-```
+> **Note:** Once installed, you can safely delete the cloned repository directory:
+> ```bash
+> cd .. && rm -rf syncdap
+> ```
 
 ### Updates
 
-To update an existing installation to the latest remote version and refresh runtime dependencies, run:
+To update `syncdap` to the latest remote release and refresh dependencies:
 
 ```bash
 syncdap --update
 ```
 
-If you retain the repository clone (or clone it again), running the installer also performs a `git pull` and updates the tool:
-
-```bash
-./install.sh --update
-```
+*(If you retain the cloned repository, running `./install.sh --update` also fetches latest commits and syncs files).*
 
 ### Uninstallation
 
-To completely remove syncdap and its launchers from your system:
+To cleanly remove `syncdap` and its launchers:
 
 ```bash
 syncdap --uninstall
 ```
-
-Alternatively, invoke `./install.sh --uninstall`.
 
 ---
 
@@ -102,22 +85,22 @@ syncdap [COMMAND] [OPTIONS] [TARGET]
 | Command | Arguments | Description |
 |---|---|---|
 | `<SPOTIFY_URL>` | URL | Download album, playlist, or track from Spotify. |
-| `-p`, `--patch` | `[FORMAT] [TARGET]` | Upgrade/patch library tracks or playlist to target format (`flac`, `mp3`, `m4a`, `opus`, `ogg`, `wav`). Default format: `flac`. |
-| `-R`, `--romaji` | `[TARGET]` | Transliterate Japanese Kanji/Kana to Hepburn Romaji and sanitize FAT32 paths. Target can be `--all` or a playlist name. |
+| `-p`, `--patch` | `[FORMAT] [TARGET]` | Upgrade/patch library tracks or playlist to target format (`flac`, `mp3`, `m4a`, `opus`, `ogg`, `wav`). Default: `flac`. |
+| `-R`, `--romaji` | `[TARGET]` | Transliterate Japanese tags and paths to Hepburn Romaji. Target can be `--all` or a playlist name. |
 | `-P`, `--playlist` | `[NAME]` | Launch interactive playlist manager (create, edit, merge, delete). |
-| `-D`, `--delete` | `PLAYLIST` | Remove a playlist and prompt to delete referenced audio files from disk. |
-| `-M`, `--merge` | `PL1 PL2 [OUT]` | Merge two playlists, deduplicating shared tracks. |
-| `-o`, `--optimize` | None | Run full DAP optimization: deduplicate, strip embedded covers, sanitize tags, and repair playlists. |
-| `-e`, `--embed` | None | Revert cover optimization by embedding `cover.jpg` back into audio file tags. |
-| `--dedup` | None | Scan library for duplicate tracks and retain the highest audio quality format. |
-| `--fix-tags` | None | Fix inconsistent metadata for Rockbox database indexing (`ALBUMARTIST`, remove 0-byte tags). |
-| `--repair-playlists` | None | Audit playlist files, relinking renamed tracks and pruning orphaned entries. |
-| `-g`, `--genres` | None | Fetch and enrich missing genre tags via iTunes, Deezer, and MusicBrainz. |
-| `-l`, `--lyrics` | None | Search and download missing timestamped `.lrc` lyric files. |
-| `-s`, `--status` | None | Display terminal dashboard with library statistics, format distribution, and health metrics. |
+| `-M`, `--merge` | `PL1 PL2 [OUT]` | Merge two playlists and deduplicate shared tracks. |
+| `-D`, `--delete` | `PLAYLIST` | Delete a playlist and prompt to purge referenced audio files from disk. |
+| `-o`, `--optimize` | None | Run full DAP optimization: deduplicate, strip embedded artwork, sanitize tags, and repair playlists. |
+| `-e`, `--embed` | None | Re-embed `cover.jpg` artwork back into audio files. |
+| `--dedup` | None | Scan library for duplicates and retain the highest audio quality format. |
+| `--fix-tags` | None | Fix inconsistent metadata for Rockbox database indexing (`ALBUMARTIST`, 0-byte tags). |
+| `--repair-playlists` | None | Audit playlist files, relinking renamed tracks and pruning dead links. |
+| `-g`, `--genres` | None | Enrich genre tags via iTunes, Deezer, and MusicBrainz. |
+| `-l`, `--lyrics` | None | Scan and download missing timestamped `.lrc` lyric files. |
+| `-s`, `--status` | None | Display terminal dashboard with library statistics and health metrics. |
 | `-f`, `--fallback` | `[URL]` | Run yt-dlp fallback recovery directly, or rescue tracks from `erros.spotdl`. |
-| `--update` | None | Pull latest remote commits and update syncdap installation and dependencies. |
-| `--uninstall` | None | Completely uninstall syncdap and remove installed files and symlinks. |
+| `--update` | None | Pull latest remote commits and update syncdap and dependencies. |
+| `--uninstall` | None | Completely remove syncdap from the system. |
 
 ### Universal Options
 
@@ -127,56 +110,57 @@ syncdap [COMMAND] [OPTIONS] [TARGET]
 | `-d`, `--dry-run` | Preview filesystem operations without modifying files on disk. |
 | `-y`, `--yes` | Non-interactive mode; automatically confirm prompts. |
 | `-F`, `--format <FMT>` | Audio format for downloads or patching (`flac`, `mp3`, `m4a`, `opus`, `ogg`, `wav`). |
-| `-r`, `--root-dir <DIR>`| Target player or library mount root (e.g. `/run/media/user/DAP` or `.`). |
-| `-t`, `--threads <NUM>` | Number of concurrent worker threads (default: `4`). |
+| `-P`, `--playlist <NAME>`| Target specific playlist (`.m3u8`). |
+| `-r`, `--root-dir <DIR>` | Target player or library mount root (e.g. `/run/media/user/DAP` or `.`). |
+| `-t`, `--threads <NUM>`  | Number of concurrent worker threads (default: `4`). |
 | `--keep-old` | Keep original audio files alongside newly patched files. |
 | `--synced-only` | In lyrics operations, only accept timestamped (`[mm:ss]`) LRC files. |
-| `-h`, `--help` | Display command usage and exit. |
+| `-h`, `--help` | Display concise command usage and exit. |
 
 ---
 
-## Examples
+## Common Workflows
 
-#### Download an album in FLAC format:
+#### Download an album in FLAC format
 ```bash
-./syncdap -F flac "https://open.spotify.com/album/4aawyAB9vmqN3uQ7FjRGTy"
+syncdap -F flac "https://open.spotify.com/album/4aawyAB9vmqN3uQ7FjRGTy"
 ```
 
-#### Transliterate entire library from Japanese Kanji to Hepburn Romaji:
+#### Transliterate entire library from Japanese Kanji to Hepburn Romaji
 ```bash
-./syncdap -R --all
+syncdap -R --all
 ```
 
-#### Transliterate a specific playlist on a connected DAP mount in dry-run mode:
+#### Transliterate a specific playlist on a connected DAP in dry-run mode
 ```bash
-./syncdap -R -P "CityPop.m3u8" -r /run/media/bagi/F695-0800 -d
+syncdap -R -P "CityPop.m3u8" -r /run/media/bagi/DAP -d
 ```
 
-#### Upgrade tracks in a playlist from MP3 to FLAC:
+#### Upgrade tracks in a playlist to FLAC
 ```bash
-./syncdap --patch flac "Favorites.m3u8"
+syncdap --patch flac "Favorites.m3u8"
 ```
 
-#### Run full Rockbox optimization (deduplication, artwork stripping, tag fixes):
+#### Run full Rockbox optimization (deduplication, artwork stripping, tag fixes)
 ```bash
-./syncdap --optimize
+syncdap --optimize
 ```
 
-#### Audit and repair broken playlist references across the library:
+#### Audit and repair broken playlist references across the library
 ```bash
-./syncdap --repair-playlists
+syncdap --repair-playlists
 ```
 
-#### Display library health and analytics:
+#### Display library health dashboard
 ```bash
-./syncdap --status
+syncdap --status
 ```
 
 ---
 
 ## Project Structure
 
-```
+```text
 syncdap/
 ├── syncdap                 # Main executable CLI coordinator (Bash)
 ├── install.sh              # Standalone installer, updater, and uninstaller

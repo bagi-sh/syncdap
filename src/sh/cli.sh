@@ -24,6 +24,10 @@ Commands:
   -l, --lyrics                 Scan and download missing timestamped .lrc lyrics
   -s, --status                 Show music library health and statistics dashboard
   -f, --fallback [URL]         Direct yt-dlp rescue (or retry erros.spotdl)
+  --split <FILE>               Split single-file full album into individual tracks
+  --audit-duration             Audit library tracks >10m to detect accidental full-album rips
+  --embed-lyrics               Scan library and embed lyrics directly into audio metadata
+  --search <QUERY>             Search track/album by name without URL
   --update                     Update syncdap to latest git commits and tools
   --uninstall                  Completely remove syncdap from system
 
@@ -35,6 +39,10 @@ Options:
   -P, --playlist <NAME>        Target specific playlist (.m3u8)
   -r, --root-dir <DIR>         Music library / DAP mount directory (default: .)
   -t, --threads <NUM>          Worker thread concurrency (default: 4)
+  --cue <FILE.cue>             Path to CUE sheet for album splitting
+  --tracklist <FILE.txt>       Path to timestamped tracklist for album splitting
+  --allow-live                 Allow live versions in candidate filter
+  --allow-remix                Allow remixes in candidate filter
   --synced-only                Only fetch timestamped [mm:ss] synced lyrics
   --keep-old                   Retain original files during patch/upgrade
   -h, --help                   Display this help message
@@ -213,6 +221,55 @@ parse_arguments() {
                     shift 1
                 fi
                 ;;
+            --split)
+                SPLIT_MODE=true
+                if [[ $# -gt 1 ]] && ! [[ "$2" =~ ^- ]]; then
+                    SPLIT_FILE="$2"
+                    shift 2
+                else
+                    shift 1
+                fi
+                ;;
+            --cue)
+                if [[ $# -lt 2 ]] || [[ "$2" =~ ^- ]]; then
+                    echo -e "${RED}❌ Error: --cue requires a file path.${RESET}"
+                    exit 1
+                fi
+                CUE_FILE="$2"
+                shift 2
+                ;;
+            --tracklist)
+                if [[ $# -lt 2 ]] || [[ "$2" =~ ^- ]]; then
+                    echo -e "${RED}❌ Error: --tracklist requires a file path.${RESET}"
+                    exit 1
+                fi
+                TRACKLIST_FILE="$2"
+                shift 2
+                ;;
+            --audit-duration|--audit)
+                AUDIT_DURATION_MODE=true
+                shift 1
+                ;;
+            --embed-lyrics)
+                EMBED_LYRICS_MODE=true
+                shift 1
+                ;;
+            --search)
+                if [[ $# -lt 2 ]] || [[ "$2" =~ ^- ]]; then
+                    echo -e "${RED}❌ Error: --search requires a search query.${RESET}"
+                    exit 1
+                fi
+                SEARCH_QUERY="$2"
+                shift 2
+                ;;
+            --allow-live)
+                ALLOW_LIVE=true
+                shift 1
+                ;;
+            --allow-remix)
+                ALLOW_REMIX=true
+                shift 1
+                ;;
             https://open.spotify.com/*)
                 RAW_URL="$1"
                 shift 1
@@ -226,6 +283,12 @@ parse_arguments() {
                     shift 1
                 elif [ "$ROMAJI_MODE" = true ] && [ -z "$ROMAJI_TARGET" ]; then
                     ROMAJI_TARGET="$1"
+                    shift 1
+                elif [ "$SPLIT_MODE" = true ] && [ -z "$SPLIT_FILE" ]; then
+                    SPLIT_FILE="$1"
+                    shift 1
+                elif [ -z "$RAW_URL" ] && [ -z "$SEARCH_QUERY" ]; then
+                    SEARCH_QUERY="$1"
                     shift 1
                 else
                     echo -e "${RED}❌ Error: Unrecognized argument: $1${RESET}"
@@ -276,7 +339,9 @@ parse_arguments() {
        [ "$OPTIMIZE_ALL" = false ] && [ "$EMBED_ALL" = false ] && \
        [ "$GENRES_ALL" = false ] && [ "$FETCH_LYRICS" = false ] && [ "$FALLBACK_ONLY" = false ] && \
        [ "$DEDUP_MODE" = false ] && [ "$FIX_TAGS_MODE" = false ] && [ "$STATUS_MODE" = false ] && \
-       [ "$REPAIR_PLAYLISTS_MODE" = false ] && [ -z "$CLEAN_URL" ]; then
+       [ "$REPAIR_PLAYLISTS_MODE" = false ] && [ "$SPLIT_MODE" = false ] && \
+       [ "$AUDIT_DURATION_MODE" = false ] && [ "$EMBED_LYRICS_MODE" = false ] && \
+       [ -z "$SEARCH_QUERY" ] && [ -z "$CLEAN_URL" ]; then
         echo -e "${RED}❌ Error: No valid action or URL specified.${RESET}"
         echo ""
         show_help

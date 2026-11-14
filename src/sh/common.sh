@@ -59,6 +59,15 @@ TARGET_M3U=""
 YTDLP_JS_ARGS=()
 UPDATE_MODE=false
 UNINSTALL_MODE=false
+SPLIT_MODE=false
+SPLIT_FILE=""
+CUE_FILE=""
+TRACKLIST_FILE=""
+AUDIT_DURATION_MODE=false
+EMBED_LYRICS_MODE=false
+SEARCH_QUERY=""
+ALLOW_LIVE=false
+ALLOW_REMIX=false
 
 resolve_music_root() {
     local base="${TARGET_ROOT:-.}"

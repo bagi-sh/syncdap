@@ -40,6 +40,30 @@ main() {
         exit $?
     fi
 
+    # Mode: Album Splitter Mode
+    if [ "$SPLIT_MODE" = true ]; then
+        orchestrate_split
+        exit $?
+    fi
+
+    # Mode: Duration Anomaly Auditor Mode
+    if [ "$AUDIT_DURATION_MODE" = true ]; then
+        orchestrate_audit_duration
+        exit $?
+    fi
+
+    # Mode: Metadata Lyrics Embedding Mode
+    if [ "$EMBED_LYRICS_MODE" = true ]; then
+        orchestrate_embed_lyrics
+        exit $?
+    fi
+
+    # Mode: Search by name without URL
+    if [ -n "$SEARCH_QUERY" ] && [ -z "$CLEAN_URL" ]; then
+        orchestrate_search_download
+        exit $?
+    fi
+
     # Mode 0b: Merge Playlists Mode
     if [ "$MERGE_PLAYLIST_MODE" = true ]; then
         local yes_flag=""

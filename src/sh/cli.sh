@@ -6,71 +6,38 @@
 
 show_help() {
     cat << 'EOF'
-Usage:
-  syncdap [OPTIONS] <SPOTIFY_URL>
-  syncdap [COMMAND] [OPTIONS]
+Usage: syncdap [OPTIONS] <URL> | [COMMAND] [OPTIONS]
 
-Primary Commands & Modes:
-  <URL>                        Download album, playlist, or track from Spotify.
-  -p, --patch [FMT] [TARGET]   Patch library tracks or playlist to FORMAT (default: flac).
-                               Target can be a playlist name (.m3u8), artist, album, or all.
-                               Alias: -u, --upgrade
-  -R, --romaji [TARGET]        Transliterate Japanese Kanji/Kana to Romaji (Hepburn) & sanitize
-                               FAT32 paths for Rockbox DAPs. Target: playlist, path, or --all.
-                               Alias: --transliterate, --rockbox-romaji
-  -P, --playlist [NAME]        Interactive playlist manager (create, edit, merge, delete).
-                               When passed with an argument to other commands, sets target playlist.
-  -D, --delete [PLAYLIST]      Delete a playlist and its audio files from disk.
-                               Alias: --delete-playlist
-  -M, --merge PL1 PL2 [OUT]    Merge two playlists into one, deduplicating shared tracks.
-                               Alias: --merge-playlists
-  -e, --embed                  Embed album cover art (cover.jpg) into all audio files.
-                               Alias: --embed-all, --embed-covers, --revert-optimize
-  -o, --optimize               Optimize for Rockbox/DAP: deduplicate library, strip embedded covers
-                               (skipping already optimized), sanitize tags, and repair/clean playlists.
-                               When used standalone: optimizes library. When used with URL: optimizes download.
-                               Alias: --optimize-all
-  --dedup                      Deduplicate audio files keeping highest quality (FLAC > M4A > MP3)
-                               and synchronize playlist references.
-  --fix-tags, --metadata       Audit and repair tags for Rockbox (unify ALBUM/ALBUMARTIST, remove 0-byte).
-  --repair-playlists           Audit and repair playlists (relink renamed tracks, prune truly missing).
-  -g, --genres                 Enrich genre metadata album-by-album (iTunes -> Deezer -> MusicBrainz).
-                               Alias: --genres-all
-  -l, --lyrics                 Scan and download missing .lrc lyrics for audio tracks.
-  -s, --status, --stats        Display comprehensive music library statistics & health dashboard.
-  -f, --fallback [URL]         Direct yt-dlp rescue with metadata, cover art, and lyrics.
-                               If no URL is given: rescues failed tracks from 'erros.spotdl'.
-                               Alias: --fallback-only
-  --update                     Update syncdap to the latest git commits and refresh dependencies.
-  --desinstall, --uninstall    Completely uninstall syncdap and remove installed files and symlinks.
+Commands:
+  <URL>                        Download album, playlist, or track from Spotify
+  -p, --patch [FMT] [TARGET]   Upgrade library/playlist audio format (default: flac)
+  -R, --romaji [TARGET]        Transliterate Japanese tags/paths to Hepburn Romaji
+  -P, --playlist [NAME]        Interactive playlist manager (create/edit/delete)
+  -M, --merge PL1 PL2 [OUT]    Merge two playlists and deduplicate tracks
+  -D, --delete [PLAYLIST]      Delete a playlist and prompt to purge audio files
+  -o, --optimize               Optimize for Rockbox/DAP (strip art, dedup, fix tags)
+  -e, --embed                  Re-embed cover.jpg art into audio files
+  --dedup                      Deduplicate tracks keeping highest audio quality
+  --fix-tags                   Audit and unify album/artist tags for Rockbox
+  --repair-playlists           Relink moved/renamed tracks and prune dead paths
+  -g, --genres                 Enrich genre tags via iTunes, Deezer & MusicBrainz
+  -l, --lyrics                 Scan and download missing timestamped .lrc lyrics
+  -s, --status                 Show music library health and statistics dashboard
+  -f, --fallback [URL]         Direct yt-dlp rescue (or retry erros.spotdl)
+  --update                     Update syncdap to latest git commits and tools
+  --uninstall                  Completely remove syncdap from system
 
-Universal & Compatible Options (Work across multiple commands):
-  -a, --all                    Apply command to entire music library (romaji, patch, embed, optimize, genres, lyrics).
-  -d, --dry-run                Simulate actions without modifying files on disk (romaji, patch, delete).
-  -y, --yes                    Assume yes to all prompts / automated non-interactive mode (patch, delete, merge).
-  -F, --format FORMAT          Audio format: flac, mp3, m4a, opus, ogg, wav (download, patch, fallback).
-  -P, --playlist NAME          Target specific playlist for --patch, --romaji, --delete, or --lyrics.
-  -r, --root-dir DIR           Root library / player directory (e.g. /run/media/bagi/F695-0800 or .).
-  -t, --threads NUM            Concurrency level for downloads and processing (default: 4).
-  --keep-old                   In patch mode, keep original files alongside new files.
-  --synced-only                In lyrics search, accept only timestamped synced lyrics ([mm:ss]).
-  -h, --help                   Display this help message and exit.
-
-Examples:
-  syncdap "https://open.spotify.com/album/..."
-  syncdap -F flac "https://open.spotify.com/album/..."
-  syncdap --patch flac "citypop (WIP)"
-  syncdap -p flac -d
-  syncdap -R --all
-  syncdap -R -P "Osu.m3u8" -r /run/media/bagi/F695-0800 -d
-  syncdap -P
-  syncdap --delete "citypop (WIP)" -y
-  syncdap --merge "pl1" "pl2" "merged_pl"
-  syncdap --embed
-  syncdap --optimize
-  syncdap --genres
-  syncdap --lyrics --synced-only
-  syncdap --fallback
+Options:
+  -a, --all                    Apply to entire music library root
+  -d, --dry-run                Preview actions without modifying files on disk
+  -y, --yes                    Skip confirmation prompts (non-interactive)
+  -F, --format <FMT>           Audio format: flac, mp3, m4a, opus, ogg, wav
+  -P, --playlist <NAME>        Target specific playlist (.m3u8)
+  -r, --root-dir <DIR>         Music library / DAP mount directory (default: .)
+  -t, --threads <NUM>          Worker thread concurrency (default: 4)
+  --synced-only                Only fetch timestamped [mm:ss] synced lyrics
+  --keep-old                   Retain original files during patch/upgrade
+  -h, --help                   Display this help message
 EOF
 }
 
@@ -92,7 +59,7 @@ parse_arguments() {
                 UPDATE_MODE=true
                 shift 1
                 ;;
-            --desinstall|--uninstall)
+            --uninstall|--unistall)
                 UNINSTALL_MODE=true
                 shift 1
                 ;;

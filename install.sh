@@ -33,8 +33,8 @@ Options:
   --system, --root     Install system-wide into /usr/local/share/syncdap and /usr/local/bin (requires root/sudo).
   --prefix <PATH>      Install into custom base directory prefix.
   --update, -u         Pull latest commits from repository and refresh installed tool & cache.
-  --desinstall,
-  --uninstall          Completely uninstall syncdap and remove installed files and symlinks.
+  --uninstall,
+  --unistall           Completely uninstall syncdap and remove installed files and symlinks.
   -y, --yes            Assume yes to prompts (non-interactive mode).
   -h, --help           Display this help message and exit.
 EOF
@@ -63,7 +63,7 @@ while [[ $# -gt 0 ]]; do
             INSTALL_MODE="update"
             shift 1
             ;;
-        --desinstall|--uninstall)
+        --uninstall|--unistall)
             INSTALL_MODE="uninstall"
             shift 1
             ;;
@@ -294,4 +294,4 @@ echo "Getting Started:"
 echo "  syncdap --help           # View commands and options"
 echo "  syncdap --status         # Check music library dashboard"
 echo "  syncdap --update         # Pull newest commits and update syncdap"
-echo "  syncdap --desinstall     # Completely remove syncdap from system"
+echo "  syncdap --uninstall      # Completely remove syncdap from system"

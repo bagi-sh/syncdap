@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Script: syncdap / syncdap.sh
+# Script: syncdap
 # Purpose: Modular Spotify audio downloader, quality switcher/upgrader,
 #          metadata/genre enricher, cover embedding, lyrics fetcher,
 #          playlist manager, and Rockbox/DAP Romaji transliterator.

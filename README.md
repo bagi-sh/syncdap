@@ -146,8 +146,6 @@ syncdap [COMMAND] [OPTIONS] [TARGET]
 ```
 syncdap/
 ├── syncdap                 # Main executable CLI coordinator (Bash)
-├── syncdap.sh              # Compatibility symlink
-├── share/                  # Root symlink to lib/share
 ├── lib/
 │   ├── sh/                 # Shell modules
 │   │   ├── cli.sh          # CLI argument parsing and help output

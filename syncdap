@@ -11,11 +11,11 @@ set -uo pipefail
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 
 # Source modular libraries
-source "$SCRIPT_DIR/lib/sh/common.sh"
-source "$SCRIPT_DIR/lib/sh/downloader.sh"
-source "$SCRIPT_DIR/lib/sh/playlists.sh"
-source "$SCRIPT_DIR/lib/sh/cli.sh"
-source "$SCRIPT_DIR/lib/sh/orchestrator.sh"
+source "$SCRIPT_DIR/src/sh/common.sh"
+source "$SCRIPT_DIR/src/sh/downloader.sh"
+source "$SCRIPT_DIR/src/sh/playlists.sh"
+source "$SCRIPT_DIR/src/sh/cli.sh"
+source "$SCRIPT_DIR/src/sh/orchestrator.sh"
 
 # --- MAIN ORCHESTRATION ---
 main() {
@@ -25,7 +25,7 @@ main() {
 
     # Mode 0a: Interactive Playlist Manager Menu
     if [ "$PLAYLIST_MANAGER_MODE" = true ]; then
-        run_py "$SCRIPT_DIR/lib/playlist_ops.py" --menu
+        run_py "$SCRIPT_DIR/src/playlists/cli.py" --menu
         exit $?
     fi
 
@@ -33,7 +33,7 @@ main() {
     if [ "$MERGE_PLAYLIST_MODE" = true ]; then
         local yes_flag=""
         [ "$ASSUME_YES" = true ] && yes_flag="--yes"
-        run_py "$SCRIPT_DIR/lib/playlist_ops.py" --merge "$MERGE_PL1" "$MERGE_PL2" ${MERGE_OUT:+"$MERGE_OUT"} $yes_flag
+        run_py "$SCRIPT_DIR/src/playlists/cli.py" --merge "$MERGE_PL1" "$MERGE_PL2" ${MERGE_OUT:+"$MERGE_OUT"} $yes_flag
         exit $?
     fi
 
@@ -46,7 +46,7 @@ main() {
             echo -e "${RED}❌ Error: --delete requires a playlist name or file.${RESET}"
             exit 1
         fi
-        run_py "$SCRIPT_DIR/lib/playlist_ops.py" --delete "$del_target" $yes_flag
+        run_py "$SCRIPT_DIR/src/playlists/cli.py" --delete "$del_target" $yes_flag
         exit $?
     fi
 
@@ -62,7 +62,7 @@ main() {
         elif [ "$ALL_MODE" = true ] || [ -z "$target" ]; then
             romaji_args+=("-a")
         fi
-        run_py "$SCRIPT_DIR/lib/romaji.py" "${romaji_args[@]}"
+        run_py "$SCRIPT_DIR/src/romaji/cli.py" "${romaji_args[@]}"
         exit $?
     fi
 
@@ -71,7 +71,7 @@ main() {
         local patch_target="${PATCH_FILTER:-$PLAYLIST_NAME}"
         echo ""
         echo -e "${BOLD}${BLUE}🚀 Starting Quality Patch to ${PATCH_FORMAT^^}...${RESET}"
-        run_py "$SCRIPT_DIR/lib/patch.py" \
+        run_py "$SCRIPT_DIR/src/patch/cli.py" \
             "$PATCH_FORMAT" \
             "$TEMP_DIR" \
             "$THREADS" \
@@ -202,7 +202,7 @@ main() {
     if [ "$DO_ROMAJI" = true ]; then
         echo ""
         echo -e "${CYAN}🎌 Transliterating downloaded tracks to Romaji...${RESET}"
-        run_py "$SCRIPT_DIR/lib/romaji.py" -r "." -t "$THREADS" -a
+        run_py "$SCRIPT_DIR/src/romaji/cli.py" -r "." -t "$THREADS" -a
         orchestrate_playlist_repair
     fi
 

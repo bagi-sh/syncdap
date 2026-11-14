@@ -1,7 +1,7 @@
 # syncdap
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Rockbox/rockbox/master/rblogo.svg" alt="Rockbox Logo" width="80" height="80" />
+  <img src="https://www.rockbox.org/rockbox400.png" alt="Rockbox Logo" width="140" />
 </p>
 
 <p align="center">

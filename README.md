@@ -146,19 +146,27 @@ syncdap [COMMAND] [OPTIONS] [TARGET]
 ```
 syncdap/
 ├── syncdap                 # Main executable CLI coordinator (Bash)
-├── lib/
-│   ├── sh/                 # Shell modules
-│   │   ├── cli.sh          # CLI argument parsing and help output
-│   │   ├── common.sh       # Shared environment, dependencies, validation
-│   │   ├── downloader.sh   # spotDL orchestration
-│   │   ├── orchestrator.sh # Submodule execution dispatchers
-│   │   └── playlists.sh    # Post-download playlist path normalization
-│   ├── share/              # Core shared utilities and constants
-│   │   ├── constants.py    # Audio formats, lossless/lossy sets, ignored folders
-│   │   ├── text.py         # Normalization, string sanitization, filename parsing
-│   │   ├── lyrics.py       # Shared LRCLIB and syncedlyrics query provider
-│   │   ├── audio.py        # Mutagen metadata inspection, library walking
-│   │   └── playlists.py    # Common playlist candidate search & path mapping
+├── src/
+│   ├── modules/            # Standalone media processing modules
+│   │   ├── covers.py       # Album artwork extraction and embedding
+│   │   ├── dedup.py        # Quality-aware library deduplication
+│   │   ├── fallback.py     # Resilient yt-dlp metadata and stream rescue
+│   │   ├── genres.py       # Multi-provider genre enrichment
+│   │   ├── lyrics.py       # Missing lyric scanner and fetcher
+│   │   ├── playlist_repair.py # Playlist auditor and dead link pruner
+│   │   ├── rockbox_tags.py # Rockbox database tag normalizer
+│   │   └── stats.py        # Library analytics reporter
+│   ├── patch/              # Audio quality patching package
+│   │   ├── metadata.py     # Audio tag extraction and transfer
+│   │   ├── worker.py       # Download and format validation worker
+│   │   ├── playlist.py     # In-playlist track upgrade coordinator
+│   │   └── cli.py          # Standalone CLI routing
+│   ├── playlists/          # Playlist management package
+│   │   ├── core.py         # Playlist search, track resolution, and analysis
+│   │   ├── actions.py      # Deletion and merging logic
+│   │   ├── manager.py      # Interactive creation and edit workflows
+│   │   ├── ui.py           # fzf terminal picker integration
+│   │   └── cli.py          # Standalone CLI routing
 │   ├── romaji/             # Japanese transliteration package
 │   │   ├── translit.py     # Kakasi Hepburn romanization, title casing, FAT32 sanitization
 │   │   ├── tags.py         # ID3, Vorbis, and MP4 tag transliteration
@@ -166,27 +174,18 @@ syncdap/
 │   │   ├── playlist.py     # Playlist track relinking and renaming
 │   │   ├── engine.py       # Traversal and directory tree renaming engine
 │   │   └── cli.py          # Standalone CLI parser
-│   ├── playlists/          # Playlist management package
-│   │   ├── core.py         # Playlist search, track resolution, and analysis
-│   │   ├── actions.py      # Deletion and merging logic
-│   │   ├── manager.py      # Interactive creation and edit workflows
-│   │   ├── ui.py           # fzf terminal picker integration
-│   │   └── cli.py          # Standalone CLI routing
-│   ├── patch/              # Audio quality patching package
-│   │   ├── metadata.py     # Audio tag extraction and transfer
-│   │   ├── worker.py       # Download and format validation worker
-│   │   ├── playlist.py     # In-playlist track upgrade coordinator
-│   │   └── cli.py          # Standalone CLI routing
-│   ├── covers.py           # Album artwork extraction and embedding
-│   ├── dedup.py            # Quality-aware library deduplication
-│   ├── fallback.py         # Resilient yt-dlp metadata and stream rescue
-│   ├── genres.py           # Multi-provider genre enrichment
-│   ├── lyrics.py           # Missing lyric scanner and fetcher
-│   ├── playlist_ops.py     # Shim importing lib/playlists
-│   ├── playlist_repair.py  # Playlist auditor and dead link pruner
-│   ├── rockbox_tags.py     # Rockbox database tag normalizer
-│   ├── romaji.py           # Shim importing lib/romaji
-│   └── stats.py            # Library analytics reporter
+│   ├── sh/                 # Shell modules
+│   │   ├── cli.sh          # CLI argument parsing and help output
+│   │   ├── common.sh       # Shared environment, dependencies, validation
+│   │   ├── downloader.sh   # spotDL orchestration
+│   │   ├── orchestrator.sh # Submodule execution dispatchers
+│   │   └── playlists.sh    # Post-download playlist path normalization
+│   └── share/              # Core shared utilities and constants
+│       ├── constants.py    # Audio formats, lossless/lossy sets, ignored folders
+│       ├── text.py         # Normalization, string sanitization, filename parsing
+│       ├── lyrics.py       # Shared LRCLIB and syncedlyrics query provider
+│       ├── audio.py        # Mutagen metadata inspection, library walking
+│       └── playlists.py    # Common playlist candidate search & path mapping
 ├── LICENSE                 # GNU General Public License v2.0
 ├── .gitignore              # Repository ignore definitions
 └── README.md

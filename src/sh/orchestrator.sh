@@ -131,3 +131,59 @@ orchestrate_lyrics() {
 
     run_py "$SCRIPT_DIR/src/modules/lyrics.py" "$dirs_file" "$THREADS" "$SYNCED_ONLY"
 }
+
+# --- METADATA LYRICS EMBEDDING ORCHESTRATION ---
+orchestrate_embed_lyrics() {
+    local music_root
+    music_root="$(resolve_music_root)"
+    local dirs_file="$TEMP_DIR/embed_lyrics_dirs.txt"
+
+    echo ""
+    echo -e "${CYAN}📝 Scanning and embedding lyrics directly into audio metadata...${RESET}"
+    find "$music_root" -mindepth 1 -type d ! -path "*/Playlists*" 2>/dev/null | sort > "$dirs_file"
+
+    run_py "$SCRIPT_DIR/src/modules/lyrics.py" "$dirs_file" "$THREADS" "$SYNCED_ONLY" --embed
+}
+
+# --- ALBUM SPLITTER ORCHESTRATION ---
+orchestrate_split() {
+    local target_file="$SPLIT_FILE"
+    if [ -z "$target_file" ] || [ ! -f "$target_file" ]; then
+        echo -e "${RED}❌ Error: --split requires a valid audio file path.${RESET}" >&2
+        exit 1
+    fi
+
+    local split_args=("$target_file")
+    [ -n "$CUE_FILE" ] && split_args+=(--cue "$CUE_FILE")
+    [ -n "$TRACKLIST_FILE" ] && split_args+=(--tracklist "$TRACKLIST_FILE")
+
+    run_py "$SCRIPT_DIR/src/modules/split.py" "${split_args[@]}"
+}
+
+# --- DURATION ANOMALY AUDITOR ORCHESTRATION ---
+orchestrate_audit_duration() {
+    local music_root
+    music_root="$(resolve_music_root)"
+    run_py "$SCRIPT_DIR/src/modules/audit.py" -r "$music_root"
+}
+
+# --- NAME SEARCH & RESOLUTION ORCHESTRATION ---
+orchestrate_search_download() {
+    local query="$SEARCH_QUERY"
+    echo ""
+    echo -e "${BOLD}${BLUE}🔍 Resolving music metadata for:${RESET} ${CYAN}'$query'${RESET}"
+
+    local meta_json
+    meta_json="$(run_py "$SCRIPT_DIR/src/modules/search.py" "$query" --json 2>/dev/null)"
+
+    if [ -z "$meta_json" ] || [ "$meta_json" = "null" ]; then
+        echo -e "${RED}❌ Error: Could not resolve metadata for '$query'.${RESET}" >&2
+        exit 1
+    fi
+
+    local meta_file="$TEMP_DIR/search_resolved.json"
+    echo "$meta_json" > "$meta_file"
+
+    echo -e "${GREEN}✅ Resolved metadata. Starting high-precision download...${RESET}"
+    orchestrate_fallback "$meta_file"
+}

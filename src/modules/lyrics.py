@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# Module: lib/lyrics.py
+# Module: src/lyrics.py
 # Purpose: Multithreaded missing lyrics scanner (.lrc) via LRCLIB and syncedlyrics
 # ==============================================================================
 

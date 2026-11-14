@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# Module: lib/stats.py
+# Module: src/stats.py
 # Purpose: Comprehensive music library analytics & status dashboard for Rockbox / DAPs.
 #          Tracks, albums, artists, format breakdown, bitrate, lyrics (synced vs unsynced),
 #          cover art status (embedded vs standalone cover.jpg), disk space, and tag health.

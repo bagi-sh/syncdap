@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# Module: lib/dedup.py
+# Module: src/dedup.py
 # Purpose: Library-wide audio deduplication (FLAC > WAV > M4A > OPUS > OGG > MP3),
 #          bitrate/lossless aware scoring, .lrc transfer, and automatic M3U/M3U8
 #          playlist relinking and entry deduplication.

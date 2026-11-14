@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# Module: lib/genres.py
+# Module: src/genres.py
 # Purpose: Album-level multi-API genre enrichment (iTunes -> Deezer -> MusicBrainz)
 # ==============================================================================
 

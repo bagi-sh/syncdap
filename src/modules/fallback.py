@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# Module: lib/fallback.py
+# Module: src/fallback.py
 # Purpose: Parallel fallback rescue via yt-dlp + universal metadata & cover embedding
 # ==============================================================================
 

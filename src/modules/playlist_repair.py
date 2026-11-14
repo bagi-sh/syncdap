@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# Module: lib/playlist_repair.py
+# Module: src/playlist_repair.py
 # Purpose: Deep playlist audit & repair.
 #          - Relinks broken paths when track actually exists on disk (format changes,
 #            /sdcard/ prefix, Romaji/sanitized folder or filename variations).

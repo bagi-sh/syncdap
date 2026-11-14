@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# Module: lib/covers.py
+# Module: src/covers.py
 # Purpose: Universal cover art embedding and Rockbox optimization (MP3, FLAC, M4A, OGG)
 # ==============================================================================
 

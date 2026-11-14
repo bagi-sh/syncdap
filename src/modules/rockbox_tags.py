@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# Module: lib/rockbox_tags.py
+# Module: src/rockbox_tags.py
 # Purpose: Deep metadata audit and sanitization specifically tailored for Rockbox.
 #          - Fixes <untagged> tracks and albums.
 #          - Unifies ALBUM and ALBUMARTIST tags per folder to prevent album splitting.

@@ -2,15 +2,43 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Temporary session & runtime files
-*.tmp
-spotdl_marker.*
-spotdl_session.*
-batch_meta.spotdl
-erros.spotdl
+# Virtual environments & package managers
+.venv/
+venv/
+env/
+ENV/
+.uv/
 
-# Audio & media files (if downloaded to local workspace)
+# Testing & linting caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+
+# Audio & media downloads in local workspace
 *.mp3
 *.flac
 *.m4a
@@ -24,12 +52,51 @@ cover.png
 folder.jpg
 folder.jpeg
 folder.png
+Playlists/
+*.m3u
+*.m3u8
 
-# Environment / OS / editor files
+# spotDL & yt-dlp temporary / session files
+spotdl_marker.*
+spotdl_session.*
+batch_meta.spotdl
+erros.spotdl
+*.part
+*.ytdl
+patch_*
+
+# Temporary files & logs
+*.tmp
+*.temp
+*.log
+
+# FAT32 / DAP / Rockbox system directories
+.rockbox/
+LOST.DIR/
+[Ss]ystem [Vv]olume [Ii]nformation/
+.trash-*/
+.Trash-*/
+.android_secure/
+.directory
+
+# OS & Editor artifacts
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+[Dd]esktop.ini
 *.swp
 *.swo
 *~
-.venv/
+*.bak
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
 .env
+.env.*

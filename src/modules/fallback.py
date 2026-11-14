@@ -21,9 +21,106 @@ from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TIT2, TPE1, TALB, TRCK, TDRC, TCON, APIC, COMM
 from mutagen.mp4 import MP4, MP4Cover
 
-from share import fetch_lyrics, sanitize_filename
+from share import (
+    fetch_lyrics,
+    sanitize_filename,
+    FULL_ALBUM_PATTERNS,
+    LIVE_PATTERNS,
+    REMIX_PATTERNS,
+)
 
 lock = threading.Lock()
+
+
+def score_video_candidate(cand: dict, artist: str, title: str, expected_dur: float | None = None,
+                          allow_live: bool = False, allow_remix: bool = False) -> int:
+    """Score a search candidate to filter out full albums, unwanted live tracks, and remixes."""
+    c_title = (cand.get('title') or '').lower()
+    channel = (cand.get('channel') or cand.get('uploader') or '').lower()
+    dur = cand.get('duration') or 0
+    t_clean = title.lower()
+
+    q_has_live = bool(re.search(r'\b(live|ao[\s\-_]*vivo|en[\s\-_]*vivo)\b', t_clean)) or allow_live
+    q_has_remix = bool(re.search(r'\b(re[\s\-_]*mix|club\s+mix|edit)\b', t_clean)) or allow_remix
+
+    score = 100
+
+    # 1. Full album rejection (hard penalty)
+    for pat in FULL_ALBUM_PATTERNS:
+        if re.search(pat, c_title):
+            return -999
+
+    # 2. Duration check against expected length
+    if expected_dur and expected_dur > 0:
+        if dur > 1.4 * expected_dur:
+            return -999
+        if dur < 0.6 * expected_dur:
+            score -= 80
+        else:
+            diff = abs(dur - expected_dur)
+            if diff <= 5:
+                score += 35
+            elif diff <= 15:
+                score += 20
+    elif dur > 720:  # If duration unknown but exceeds 12 minutes, penalize heavily
+        score -= 150
+
+    # 3. Live version filter
+    if not q_has_live:
+        for pat in LIVE_PATTERNS:
+            if re.search(pat, c_title):
+                score -= 80
+                break
+
+    # 4. Remix / bootleg / karaoke filter
+    if not q_has_remix:
+        for pat in REMIX_PATTERNS:
+            if re.search(pat, c_title):
+                score -= 80
+                break
+
+    # 5. Channel affinity & Topic channel boost
+    art_clean = artist.lower()
+    if channel.endswith(' - topic'):
+        score += 60
+    elif art_clean in channel or channel in art_clean:
+        score += 40
+
+    if cand.get('channel_is_verified'):
+        score += 15
+
+    return score
+
+
+def find_best_candidate_url(artist: str, title: str, expected_dur: float | None,
+                            js_args: list[str], allow_live: bool = False,
+                            allow_remix: bool = False) -> str:
+    """Query top 5 candidates via yt-dlp and return the highest-scoring candidate URL."""
+    search_query = f"ytsearch5:{artist} - {title}"
+    cmd = ['yt-dlp', '--flat-playlist', '--dump-json', *js_args, search_query]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=12)
+        candidates = []
+        for line in proc.stdout.strip().split('\n'):
+            line = line.strip()
+            if line:
+                try:
+                    candidates.append(json.loads(line))
+                except Exception:
+                    pass
+
+        if candidates:
+            scored = [(score_video_candidate(c, artist, title, expected_dur, allow_live, allow_remix), c)
+                      for c in candidates]
+            scored.sort(key=lambda x: x[0], reverse=True)
+            best_score, best_cand = scored[0]
+            cand_url = best_cand.get('url') or best_cand.get('webpage_url')
+            if best_score > 0 and cand_url:
+                return cand_url
+    except Exception:
+        pass
+
+    return f"ytsearch1:{artist} - {title}"
 
 
 def sanitize(name):
@@ -169,9 +266,10 @@ def rescue_track(idx, total, d, temp_dir, target_m3u, target_ext, js_args, synce
     temp_dest = f"{temp_base}.{target_ext}"
 
     ytdlp_fmt = 'vorbis' if target_ext == 'ogg' else target_ext
+    target_source = find_best_candidate_url(artist, title, duration, js_args)
     cmd = [
         'yt-dlp',
-        f"ytsearch1:{artist} - {title}",
+        target_source,
         '--no-playlist',
         *js_args,
         '-x', '--audio-format', ytdlp_fmt,

@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -148,12 +149,23 @@ def parse_tracklist_text(text: str, total_duration: float | None = None) -> list
 # 2. Online metadata fallback (iTunes preferred → MusicBrainz)
 # ==============================================================================
 
-def fetch_album_tracklist(artist: str, album: str) -> list[dict] | None:
-    """
-    Query iTunes (preferred) then MusicBrainz for the album's official track list.
-    Returns list of {'title': str, 'duration': float} ordered by track number, or None.
-    """
-    # ---- iTunes ----
+# Strip edition/remaster suffixes before API search
+_ALBUM_EDITION_RE = re.compile(
+    r'\s*[\(\[,]\s*(?:deluxe|deluxe edition|super deluxe|remastered|remaster|'
+    r'expanded|anniversary|bonus tracks?|special edition|limited edition|'
+    r'explicit|clean|instrumental|radio edit|original soundtrack|ost|'
+    r'\d{4} remaster|\d+th anniversary)[^\)\]]*[\)\]]?',
+    re.IGNORECASE
+)
+
+
+def _normalize_album_for_search(album: str) -> str:
+    """Strip edition/remaster suffixes for a cleaner API search query."""
+    return _ALBUM_EDITION_RE.sub('', album).strip()
+
+
+def _fetch_itunes_tracklist(artist: str, album: str) -> list[dict] | None:
+    """iTunes album lookup → ordered track list or None."""
     try:
         query = f"{artist} {album}".strip()
         itunes_url = "https://itunes.apple.com/search?" + urllib.parse.urlencode({
@@ -166,39 +178,35 @@ def fetch_album_tracklist(artist: str, album: str) -> list[dict] | None:
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.load(resp)
         results = data.get('results', [])
-        if results:
-            collection_id = results[0].get('collectionId')
-            if collection_id:
-                lookup_url = (
-                    f"https://itunes.apple.com/lookup?id={collection_id}&entity=song"
-                )
-                req2 = urllib.request.Request(lookup_url, headers={'User-Agent': 'SyncDAP/1.0'})
-                with urllib.request.urlopen(req2, timeout=8) as resp2:
-                    track_data = json.load(resp2)
-                itunes_tracks = []
-                for t in sorted(
-                    track_data.get('results', []),
-                    key=lambda x: x.get('trackNumber', 0)
-                ):
-                    if t.get('wrapperType') != 'track':
-                        continue
-                    t_title = t.get('trackName')
-                    dur_ms = t.get('trackTimeMillis')
-                    if t_title and dur_ms:
-                        itunes_tracks.append({'title': t_title, 'duration': dur_ms / 1000.0})
-                if itunes_tracks:
-                    return itunes_tracks
+        if not results:
+            return None
+        collection_id = results[0].get('collectionId')
+        if not collection_id:
+            return None
+        lookup_url = f"https://itunes.apple.com/lookup?id={collection_id}&entity=song"
+        req2 = urllib.request.Request(lookup_url, headers={'User-Agent': 'SyncDAP/1.0'})
+        with urllib.request.urlopen(req2, timeout=8) as resp2:
+            track_data = json.load(resp2)
+        itunes_tracks = []
+        for t in sorted(track_data.get('results', []), key=lambda x: x.get('trackNumber', 0)):
+            if t.get('wrapperType') != 'track':
+                continue
+            t_title = t.get('trackName')
+            dur_ms = t.get('trackTimeMillis')
+            if t_title and dur_ms:
+                itunes_tracks.append({'title': t_title, 'duration': dur_ms / 1000.0})
+        return itunes_tracks if itunes_tracks else None
     except Exception:
-        pass
+        return None
 
-    # ---- MusicBrainz ----
+
+def _fetch_musicbrainz_tracklist(artist: str, album: str) -> list[dict] | None:
+    """MusicBrainz release-group → release → recordings track list or None."""
     try:
-        time.sleep(1.0)  # respect 1 req/sec rate limit
+        time.sleep(1.0)
         mb_query = f'release:"{album}" AND artist:"{artist}"'
         mb_url = "https://musicbrainz.org/ws/2/release-group/?" + urllib.parse.urlencode({
-            'query': mb_query,
-            'fmt': 'json',
-            'limit': 1
+            'query': mb_query, 'fmt': 'json', 'limit': 1
         })
         req = urllib.request.Request(mb_url, headers={'User-Agent': 'SyncDAP/1.0 (info@syncdap.local)'})
         with urllib.request.urlopen(req, timeout=8) as resp:
@@ -210,14 +218,11 @@ def fetch_album_tracklist(artist: str, album: str) -> list[dict] | None:
         if not rg_id:
             return None
 
-        # Fetch releases for the release-group and get the first one's tracks
         time.sleep(1.0)
-        rel_search_url = "https://musicbrainz.org/ws/2/release/?" + urllib.parse.urlencode({
-            'release-group': rg_id,
-            'fmt': 'json',
-            'limit': 1
+        rel_url = "https://musicbrainz.org/ws/2/release/?" + urllib.parse.urlencode({
+            'release-group': rg_id, 'fmt': 'json', 'limit': 1
         })
-        req2 = urllib.request.Request(rel_search_url, headers={'User-Agent': 'SyncDAP/1.0 (info@syncdap.local)'})
+        req2 = urllib.request.Request(rel_url, headers={'User-Agent': 'SyncDAP/1.0 (info@syncdap.local)'})
         with urllib.request.urlopen(req2, timeout=8) as resp2:
             rel_list = json.load(resp2)
         releases = rel_list.get('releases', [])
@@ -226,11 +231,10 @@ def fetch_album_tracklist(artist: str, album: str) -> list[dict] | None:
         rel_id = releases[0].get('id')
 
         time.sleep(1.0)
-        rel_url = f"https://musicbrainz.org/ws/2/release/{rel_id}?" + urllib.parse.urlencode({
-            'inc': 'recordings',
-            'fmt': 'json'
+        rec_url = f"https://musicbrainz.org/ws/2/release/{rel_id}?" + urllib.parse.urlencode({
+            'inc': 'recordings', 'fmt': 'json'
         })
-        req3 = urllib.request.Request(rel_url, headers={'User-Agent': 'SyncDAP/1.0 (info@syncdap.local)'})
+        req3 = urllib.request.Request(rec_url, headers={'User-Agent': 'SyncDAP/1.0 (info@syncdap.local)'})
         with urllib.request.urlopen(req3, timeout=8) as resp3:
             rel_data = json.load(resp3)
 
@@ -241,10 +245,34 @@ def fetch_album_tracklist(artist: str, album: str) -> list[dict] | None:
                 dur_ms = tr.get('length')
                 if t_title and dur_ms:
                     mb_tracks.append({'title': t_title, 'duration': dur_ms / 1000.0})
-        if mb_tracks:
-            return mb_tracks
+        return mb_tracks if mb_tracks else None
     except Exception:
-        pass
+        return None
+
+
+def fetch_album_tracklist(artist: str, album: str) -> list[dict] | None:
+    """
+    Try iTunes then MusicBrainz for official album track list.
+    Each source is tried twice: once with the original album name, once with
+    edition suffixes stripped (e.g. 'In Tongues (Deluxe)' → 'In Tongues').
+    Returns list of {'title': str, 'duration': float} or None.
+    """
+    album_variants = [album]
+    normalized = _normalize_album_for_search(album)
+    if normalized.lower() != album.lower():
+        album_variants.append(normalized)
+
+    for album_q in album_variants:
+        result = _fetch_itunes_tracklist(artist, album_q)
+        if result:
+            print(f"   📡 iTunes: found {len(result)} tracks for \"{artist} – {album_q}\"")
+            return result
+
+    for album_q in album_variants:
+        result = _fetch_musicbrainz_tracklist(artist, album_q)
+        if result:
+            print(f"   📡 MusicBrainz: found {len(result)} tracks for \"{artist} – {album_q}\"")
+            return result
 
     return None
 
@@ -262,9 +290,7 @@ def find_silence_snap_point(file_path: str, target_sec: float, search_window: fl
     duration = search_window * 2.0
 
     cmd = [
-        'ffmpeg',
-        '-ss', str(start_search),
-        '-t', str(duration),
+        'ffmpeg', '-ss', str(start_search), '-t', str(duration),
         '-i', file_path,
         '-af', 'silencedetect=noise=-35dB:d=0.3',
         '-f', 'null', '-'
@@ -273,11 +299,11 @@ def find_silence_snap_point(file_path: str, target_sec: float, search_window: fl
         proc = subprocess.run(cmd, capture_output=True, text=True)
         output = proc.stderr
         silence_starts = [float(m.group(1)) for m in re.finditer(r'silence_start:\s*([\d.]+)', output)]
-        silence_ends = [float(m.group(1)) for m in re.finditer(r'silence_end:\s*([\d.]+)', output)]
+        silence_ends   = [float(m.group(1)) for m in re.finditer(r'silence_end:\s*([\d.]+)',   output)]
 
         if silence_starts and silence_ends:
             abs_start = start_search + silence_starts[0]
-            abs_end = start_search + silence_ends[0]
+            abs_end   = start_search + silence_ends[0]
             return (abs_start + abs_end) / 2.0
         elif silence_starts:
             return start_search + silence_starts[0]
@@ -356,7 +382,24 @@ def tag_split_track(
 
 
 # ==============================================================================
-# 5. Main split orchestrator
+# 5. Helpers
+# ==============================================================================
+
+def _get_file_duration(path: str) -> float:
+    """Return duration in seconds via ffprobe, or 0.0 on failure."""
+    try:
+        cmd = [
+            'ffprobe', '-v', 'quiet', '-print_format', 'json',
+            '-show_entries', 'format=duration', path
+        ]
+        out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+        return float(json.loads(out).get('format', {}).get('duration', 0.0))
+    except Exception:
+        return 0.0
+
+
+# ==============================================================================
+# 6. Main split orchestrator
 # ==============================================================================
 
 def split_album(
@@ -366,20 +409,69 @@ def split_album(
     output_dir: str | None = None,
     snap_silence: bool = True,
 ):
-    """Precision lossless split of a single-file full album into individual tracks."""
+    """
+    Precision lossless split of a single-file full album into individual tracks.
+
+    Output layout:
+      Tracks go directly into the album's own folder ({Artist}/{Album}/),
+      preserving the standard music library structure. A temp dir is used
+      during splitting; files are moved in-place only after all tracks are
+      verified, then the original rip file(s) are removed.
+
+    Handles:
+      - Sibling files sharing the same duration (all copies of the same rip)
+        → only the first is split; duplicates are removed on success.
+      - Existing individual track files in the target folder
+        → overwritten cleanly.
+    """
     if not os.path.isfile(audio_file):
         print(f"❌ Error: Audio file '{audio_file}' not found.")
         sys.exit(1)
 
-    meta = get_audio_metadata(audio_file)
-    artist = meta.get('artist') or "Unknown Artist"
-    album = meta.get('album') or os.path.splitext(os.path.basename(audio_file))[0]
-    total_dur = meta.get('duration') or 0.0
+    album_dir  = os.path.dirname(os.path.abspath(audio_file))
+    file_ext   = os.path.splitext(audio_file)[1].lower()
 
-    print(f"\n🎧 Inspecting album for split: {audio_file}")
+    meta       = get_audio_metadata(audio_file)
+    artist     = meta.get('artist') or "Unknown Artist"
+    album      = meta.get('album') or os.path.splitext(os.path.basename(audio_file))[0]
+    total_dur  = meta.get('duration') or _get_file_duration(audio_file)
+
+    print(f"\n🎧 Inspecting: {audio_file}")
     print(f"   Artist : {artist}")
     print(f"   Album  : {album}")
     print(f"   Length : {total_dur/60:.1f} min")
+
+    # ── Detect sibling files that are copies of the same full-album rip ──────
+    sibling_dupes: list[str] = []
+    for fname in sorted(os.listdir(album_dir)):
+        fpath = os.path.join(album_dir, fname)
+        if os.path.abspath(fpath) == os.path.abspath(audio_file):
+            continue
+        if os.path.splitext(fname)[1].lower() not in AUDIO_EXTENSIONS:
+            continue
+        sib_dur = _get_file_duration(fpath)
+        if abs(sib_dur - total_dur) < 2.0:   # within 2 s → same rip
+            sibling_dupes.append(fpath)
+
+    if sibling_dupes:
+        print(f"   ⚠️  {len(sibling_dupes)} sibling rip file(s) detected (same duration) — "
+              f"will be removed after successful split:")
+        for s in sibling_dupes:
+            print(f"      🗑️  {os.path.basename(s)}")
+
+    # ── Detect pre-existing individual track files in the album dir ───────────
+    existing_tracks = [
+        os.path.join(album_dir, f)
+        for f in os.listdir(album_dir)
+        if os.path.splitext(f)[1].lower() in AUDIO_EXTENSIONS
+        and os.path.join(album_dir, f) not in sibling_dupes
+        and os.path.abspath(os.path.join(album_dir, f)) != os.path.abspath(audio_file)
+    ]
+    if existing_tracks:
+        print(f"   ♻️  {len(existing_tracks)} existing track file(s) in folder — "
+              f"will be overwritten by split output:")
+        for t in existing_tracks:
+            print(f"      📄 {os.path.basename(t)}")
 
     tracks: list[dict] = []
 
@@ -388,13 +480,13 @@ def split_album(
     if tracks:
         print(f"   ✅ Detected {len(tracks)} embedded chapter marker(s).")
 
-    # ── Step 2: CUE sheet (provided or auto-discovered next to audio file) ────
+    # ── Step 2: CUE sheet (provided or auto-discovered) ───────────────────────
     if not tracks:
         cand_cue = cue_file or os.path.splitext(audio_file)[0] + '.cue'
         if os.path.isfile(cand_cue):
             tracks = parse_cue_file(cand_cue, total_dur)
             if tracks:
-                print(f"   ✅ Parsed {len(tracks)} track(s) from CUE sheet: {cand_cue}")
+                print(f"   ✅ Parsed {len(tracks)} track(s) from CUE sheet.")
 
     # ── Step 3: timestamp tracklist (.description / .txt / provided) ──────────
     if not tracks:
@@ -411,21 +503,21 @@ def split_album(
                     raw_text = tf.read()
                 tracks = parse_tracklist_text(raw_text, total_dur)
                 if tracks:
-                    print(f"   ✅ Parsed {len(tracks)} track(s) from timestamp file: {cand_txt}")
+                    print(f"   ✅ Parsed {len(tracks)} track(s) from timestamp file.")
             except Exception:
                 pass
 
     # ── Step 4: online metadata fallback (iTunes preferred → MusicBrainz) ────
     if not tracks:
-        print(f"   🔎 No local track info found. Querying online metadata for \"{artist} - {album}\"...")
+        print(f"   🔎 Querying online metadata for \"{artist} – {album}\"...")
         fallback = fetch_album_tracklist(artist, album)
         if fallback:
             print(f"   ✅ Retrieved {len(fallback)} track(s) from online metadata.")
             cumulative = 0.0
             for i, item in enumerate(fallback, 1):
-                dur = item.get('duration', 0.0)
+                dur   = item.get('duration', 0.0)
                 start = cumulative
-                end = cumulative + dur if dur > 0 else None
+                end   = cumulative + dur if dur > 0 else None
                 tracks.append({
                     'track_num': i,
                     'title': item.get('title', f'Track {i:02d}'),
@@ -440,72 +532,97 @@ def split_album(
             print("        syncdap --split <file> --cue <file.cue>")
             sys.exit(1)
 
-    # ── Splitting ─────────────────────────────────────────────────────────────
-    target_dir = output_dir or os.path.dirname(os.path.abspath(audio_file))
-    album_subdir = os.path.join(target_dir, sanitize_filename(f"{artist} - {album}"))
-    os.makedirs(album_subdir, exist_ok=True)
-
-    file_ext = os.path.splitext(audio_file)[1].lower()
+    # ── Split into temp dir, then verify and move in-place ───────────────────
     total_tracks = len(tracks)
+    final_dir    = output_dir if output_dir else album_dir
+    cover_jpg    = os.path.join(album_dir, 'cover.jpg')
 
-    # Copy cover art if available next to the source
-    cover_jpg = os.path.join(os.path.dirname(os.path.abspath(audio_file)), 'cover.jpg')
-    dest_cover = os.path.join(album_subdir, 'cover.jpg')
-    if os.path.isfile(cover_jpg) and not os.path.isfile(dest_cover):
-        shutil.copy2(cover_jpg, dest_cover)
+    print(f"\n🚀 Splitting {total_tracks} track(s)... (temp dir → {final_dir})")
+    temp_dir = tempfile.mkdtemp(prefix="syncdap_split_")
 
-    playlist_lines: list[str] = []
-    print(f"\n🚀 Splitting {total_tracks} track(s) into: {album_subdir}")
+    try:
+        playlist_lines: list[str] = []
 
-    for tr in tracks:
-        idx = tr['track_num']
-        raw_title = tr['title']
-        clean_tit = sanitize_filename(raw_title)
-        out_name = f"{idx:02d} {clean_tit} - {artist}{file_ext}"
-        out_path = os.path.join(album_subdir, out_name)
+        for tr in tracks:
+            idx        = tr['track_num']
+            raw_title  = tr['title']
+            clean_tit  = sanitize_filename(raw_title)
+            out_name   = f"{idx:02d} {clean_tit} - {artist}{file_ext}"
+            tmp_path   = os.path.join(temp_dir, out_name)
 
-        start_time = tr['start']
-        end_time = tr.get('end')
+            start_time = tr['start']
+            end_time   = tr.get('end')
 
-        # Silence-snap refinement (skip for track 1 — it starts at 0)
-        if snap_silence and idx > 1 and start_time > 0:
-            start_time = find_silence_snap_point(audio_file, start_time)
+            if snap_silence and idx > 1 and start_time > 0:
+                start_time = find_silence_snap_point(audio_file, start_time)
 
-        cmd = ['ffmpeg', '-y', '-hide_banner', '-loglevel', 'error',
-               '-ss', f"{start_time:.3f}"]
-        if end_time is not None and end_time > start_time:
-            cmd += ['-to', f"{end_time:.3f}"]
-        cmd += ['-i', audio_file, '-c', 'copy', out_path]
+            cmd = ['ffmpeg', '-y', '-hide_banner', '-loglevel', 'error',
+                   '-ss', f"{start_time:.3f}"]
+            if end_time is not None and end_time > start_time:
+                cmd += ['-to', f"{end_time:.3f}"]
+            cmd += ['-i', audio_file, '-c', 'copy', tmp_path]
 
-        subprocess.run(cmd, check=True)
-        tag_split_track(out_path, artist, album, clean_tit, idx, total_tracks,
-                        dest_cover if os.path.isfile(dest_cover) else None)
+            subprocess.run(cmd, check=True)
+            tag_split_track(tmp_path, artist, album, clean_tit, idx, total_tracks,
+                            cover_jpg if os.path.isfile(cover_jpg) else None)
 
-        print(f"   [{idx:02d}/{total_tracks:02d}] ✅ {out_name}")
-        playlist_lines.append(out_name)
+            print(f"   [{idx:02d}/{total_tracks:02d}] ✅ {out_name}")
+            playlist_lines.append(out_name)
 
-    # M3U8 playlist
-    m3u8_path = os.path.join(album_subdir, f"{sanitize_filename(album)}.m3u8")
-    with open(m3u8_path, 'w', encoding='utf-8') as pf:
-        pf.write("\n".join(playlist_lines) + "\n")
+        # ── Verify: all split files must exist and be non-empty ──────────────
+        for name in playlist_lines:
+            p = os.path.join(temp_dir, name)
+            if not os.path.isfile(p) or os.path.getsize(p) == 0:
+                raise RuntimeError(f"Split output missing or empty: {name}")
 
-    print(f"\n🎉 Split complete! {total_tracks} tracks saved to: {album_subdir}")
+        # ── Move split tracks into the final album dir (overwrite existing) ──
+        for name in playlist_lines:
+            src = os.path.join(temp_dir, name)
+            dst = os.path.join(final_dir, name)
+            if os.path.isfile(dst):
+                os.remove(dst)   # explicit remove before move → safe overwrite
+            shutil.move(src, dst)
+
+        # ── Write m3u8 playlist ───────────────────────────────────────────────
+        m3u8_path = os.path.join(final_dir, f"{sanitize_filename(album)}.m3u8")
+        with open(m3u8_path, 'w', encoding='utf-8') as pf:
+            pf.write("\n".join(playlist_lines) + "\n")
+
+        # ── Remove original full-album rip(s) ────────────────────────────────
+        all_rips = [os.path.abspath(audio_file)] + [os.path.abspath(p) for p in sibling_dupes]
+        print(f"\n🗑️  Removing {len(all_rips)} original rip file(s)...")
+        for rip in all_rips:
+            try:
+                os.remove(rip)
+                print(f"   🗑️  {os.path.basename(rip)}")
+            except Exception as e:
+                print(f"   ⚠️  Could not remove {os.path.basename(rip)}: {e}")
+
+        print(f"\n🎉 Split complete! {total_tracks} tracks saved to: {final_dir}")
+
+    except Exception as e:
+        print(f"\n❌ Split failed: {e}")
+        print(f"   Temp files preserved at: {temp_dir}")
+        sys.exit(1)
+    finally:
+        if os.path.isdir(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 # ==============================================================================
-# 6. CLI entry-point
+# 7. CLI entry-point
 # ==============================================================================
 
 def main():
     parser = argparse.ArgumentParser(
         description=(
             "Lossless album splitter. Splits a single-file album into individual tracks.\n"
-            "Sources (in order of preference): embedded chapters → CUE sheet → "
+            "Sources (in order): embedded chapters → CUE sheet → "
             "timestamp tracklist → iTunes/MusicBrainz online metadata."
         )
     )
     parser.add_argument("audio_file", help="Path to single-file album (.flac, .mp3, .m4a, .opus).")
-    parser.add_argument("--cue", help="Path to accompanying .cue sheet.")
+    parser.add_argument("--cue",       help="Path to accompanying .cue sheet.")
     parser.add_argument("--tracklist", help="Path to text file with timestamps and titles.")
     parser.add_argument("-o", "--output", help="Output directory for split tracks.")
     parser.add_argument("--no-snap", action="store_true", help="Disable silence-snap boundary refinement.")

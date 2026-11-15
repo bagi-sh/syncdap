@@ -385,6 +385,9 @@ def tag_split_track(
 # 5. Helpers
 # ==============================================================================
 
+_LOSSLESS_EXTS = {'.flac', '.wav', '.aiff', '.ape', '.alac'}
+
+
 def _get_file_duration(path: str) -> float:
     """Return duration in seconds via ffprobe, or 0.0 on failure."""
     try:
@@ -396,6 +399,50 @@ def _get_file_duration(path: str) -> float:
         return float(json.loads(out).get('format', {}).get('duration', 0.0))
     except Exception:
         return 0.0
+
+
+def _is_lossless(path: str) -> bool:
+    return os.path.splitext(path)[1].lower() in _LOSSLESS_EXTS
+
+
+def _get_bitrate_kbps(path: str) -> int:
+    """Return audio bitrate in kbps via ffprobe, or 0 on failure."""
+    try:
+        cmd = [
+            'ffprobe', '-v', 'quiet', '-print_format', 'json',
+            '-show_entries', 'format=bit_rate', path
+        ]
+        out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+        br = json.loads(out).get('format', {}).get('bit_rate', 0)
+        return int(br) // 1000
+    except Exception:
+        return 0
+
+
+def _track_number_from_filename(fname: str) -> int | None:
+    """Extract leading track number (e.g. '03 Title - Artist.mp3' → 3)."""
+    m = re.match(r'^(\d+)\s', fname)
+    return int(m.group(1)) if m else None
+
+
+def _split_track_beats_existing(split_path: str, existing_path: str) -> tuple[bool, str]:
+    """
+    Compare quality of split_path vs existing_path.
+    Returns (should_replace: bool, reason: str).
+    """
+    split_ll    = _is_lossless(split_path)
+    existing_ll = _is_lossless(existing_path)
+
+    if split_ll and not existing_ll:
+        return True,  "split is lossless, existing is lossy → upgrade"
+    if not split_ll and existing_ll:
+        return False, "existing is lossless, split is lossy → keep existing"
+    # Same category → compare bitrate
+    split_br    = _get_bitrate_kbps(split_path)
+    existing_br = _get_bitrate_kbps(existing_path)
+    if split_br > existing_br:
+        return True,  f"split has higher bitrate ({split_br} > {existing_br} kbps) → upgrade"
+    return False, f"existing has same/better bitrate ({existing_br} >= {split_br} kbps) → keep existing"
 
 
 # ==============================================================================
@@ -575,13 +622,57 @@ def split_album(
             if not os.path.isfile(p) or os.path.getsize(p) == 0:
                 raise RuntimeError(f"Split output missing or empty: {name}")
 
-        # ── Move split tracks into the final album dir (overwrite existing) ──
+        # ── Move split tracks into the final album dir (quality-aware) ───────
+        kept    = []   # file names kept from existing
+        placed  = []   # file names moved in from split
+        upgraded = []  # file names that replaced an existing lower-quality file
+
         for name in playlist_lines:
-            src = os.path.join(temp_dir, name)
-            dst = os.path.join(final_dir, name)
-            if os.path.isfile(dst):
-                os.remove(dst)   # explicit remove before move → safe overwrite
-            shutil.move(src, dst)
+            src       = os.path.join(temp_dir, name)
+            track_num = _track_number_from_filename(name)
+
+            # Find an existing file in final_dir with the same track number
+            # (may differ in title/format after a previous partial split)
+            existing_match: str | None = None
+            if track_num is not None:
+                for f in sorted(os.listdir(final_dir)):
+                    if _track_number_from_filename(f) == track_num:
+                        fp = os.path.join(final_dir, f)
+                        if (os.path.isfile(fp)
+                                and os.path.abspath(fp) != os.path.abspath(audio_file)
+                                and os.path.abspath(fp) not in [os.path.abspath(p) for p in sibling_dupes]):
+                            existing_match = fp
+                            break
+
+            if existing_match:
+                replace, reason = _split_track_beats_existing(src, existing_match)
+                if replace:
+                    os.remove(existing_match)
+                    shutil.move(src, os.path.join(final_dir, name))
+                    upgraded.append(f"{os.path.basename(existing_match)} → {name}  [{reason}]")
+                else:
+                    os.remove(src)   # discard inferior split track
+                    kept.append(f"{os.path.basename(existing_match)}  [{reason}]")
+            else:
+                dst = os.path.join(final_dir, name)
+                if os.path.isfile(dst):
+                    os.remove(dst)
+                shutil.move(src, dst)
+                placed.append(name)
+
+        # Print quality-decision summary
+        if placed:
+            print(f"\n📥 New tracks placed ({len(placed)}):")
+            for n in placed:
+                print(f"   + {n}")
+        if upgraded:
+            print(f"\n⬆️  Quality upgrades ({len(upgraded)}):")
+            for n in upgraded:
+                print(f"   ↑ {n}")
+        if kept:
+            print(f"\n♻️  Existing files kept — split track discarded ({len(kept)}):")
+            for n in kept:
+                print(f"   = {n}")
 
         # ── Write m3u8 playlist ───────────────────────────────────────────────
         m3u8_path = os.path.join(final_dir, f"{sanitize_filename(album)}.m3u8")

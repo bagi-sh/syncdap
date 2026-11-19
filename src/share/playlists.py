@@ -131,3 +131,86 @@ def format_track_for_playlist(track_path: str, pl_path: str) -> str:
     pl_dir = os.path.dirname(os.path.abspath(pl_path))
     track_abs = os.path.abspath(track_path)
     return os.path.relpath(track_abs, pl_dir)
+
+
+def expand_playlist_entries(root_dir: str, migration_map: dict[str, list[str]]) -> int:
+    """
+    Expand 1-to-N bundled album references into individual track entries across playlists.
+    migration_map: { old_abs_path: [new_abs_track_01, new_abs_track_02, ...] }
+    Preserves #EXTINF comments, prevents duplicates, and saves atomically.
+    Returns the number of modified playlists.
+    """
+    if not migration_map:
+        return 0
+
+    norm_map = {
+        os.path.abspath(k): [os.path.abspath(p) for p in v]
+        for k, v in migration_map.items() if v
+    }
+    if not norm_map:
+        return 0
+
+    all_playlists = get_all_playlist_files([root_dir])
+    modified_count = 0
+
+    for pl_path in all_playlists:
+        if not os.path.isfile(pl_path):
+            continue
+
+        pl_dir = os.path.dirname(os.path.abspath(pl_path))
+        try:
+            with open(pl_path, 'r', encoding='utf-8', errors='ignore') as f:
+                lines = f.readlines()
+        except Exception:
+            continue
+
+        new_lines: list[str] = []
+        changed = False
+        seen_tracks = set()
+
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                new_lines.append(line)
+                continue
+
+            if stripped.startswith('#'):
+                new_lines.append(line)
+                continue
+
+            resolved = resolve_track_file(stripped, pl_dir)
+            abs_resolved = os.path.abspath(resolved)
+
+            if abs_resolved in norm_map:
+                changed = True
+                new_tracks = norm_map[abs_resolved]
+                is_rel = not os.path.isabs(stripped) and not stripped.startswith('/')
+
+                for t_path in new_tracks:
+                    if t_path in seen_tracks:
+                        continue
+                    seen_tracks.add(t_path)
+                    if is_rel:
+                        entry = format_track_for_playlist(t_path, pl_path)
+                    else:
+                        entry = t_path
+                    new_lines.append(f"{entry}\n")
+            else:
+                seen_tracks.add(abs_resolved)
+                new_lines.append(line)
+
+        if changed:
+            tmp_path = f"{pl_path}.tmp"
+            try:
+                with open(tmp_path, 'w', encoding='utf-8') as f:
+                    f.writelines(new_lines)
+                os.replace(tmp_path, pl_path)
+                modified_count += 1
+            except Exception:
+                if os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except OSError:
+                        pass
+
+    return modified_count

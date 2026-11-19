@@ -6,7 +6,7 @@
 # Supported audio extensions across all modules
 AUDIO_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav')
 
-LOSSLESS_EXTENSIONS = ('.flac', '.wav')
+LOSSLESS_EXTENSIONS = ('.flac', '.wav', '.aiff', '.ape', '.alac')
 LOSSY_EXTENSIONS = ('.m4a', '.opus', '.ogg', '.mp3')
 
 # System, filesystem, and player directories to ignore during library traversal

@@ -40,8 +40,6 @@ Options:
   -P, --playlist <NAME>        Target specific playlist (.m3u8)
   -r, --root-dir <DIR>         Music library / DAP mount directory (default: .)
   -t, --threads <NUM>          Worker thread concurrency (default: 4)
-  --cue <FILE.cue>             Path to CUE sheet for album splitting
-  --tracklist <FILE.txt>       Path to timestamped tracklist for album splitting
   --allow-live                 Allow live versions in candidate filter
   --allow-remix                Allow remixes in candidate filter
   --synced-only                Only fetch timestamped [mm:ss] synced lyrics
@@ -232,22 +230,6 @@ parse_arguments() {
                 else
                     shift 1
                 fi
-                ;;
-            --cue)
-                if [[ $# -lt 2 ]] || [[ "$2" =~ ^- ]]; then
-                    echo -e "${RED}❌ Error: --cue requires a file path.${RESET}"
-                    exit 1
-                fi
-                CUE_FILE="$2"
-                shift 2
-                ;;
-            --tracklist)
-                if [[ $# -lt 2 ]] || [[ "$2" =~ ^- ]]; then
-                    echo -e "${RED}❌ Error: --tracklist requires a file path.${RESET}"
-                    exit 1
-                fi
-                TRACKLIST_FILE="$2"
-                shift 2
                 ;;
             --audit-duration|--audit)
                 AUDIT_DURATION_MODE=true

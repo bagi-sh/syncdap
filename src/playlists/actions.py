@@ -4,6 +4,7 @@
 # ==============================================================================
 
 import os
+from share import parse_playlist_file
 from .core import (
     find_playlist_file,
     get_all_playlist_files,
@@ -153,22 +154,17 @@ def merge_playlists_flow(pl1_query, pl2_query, out_name=None, delete_sources=Fal
     def read_playlist_entries(p):
         entries = []
         cur_comments = []
-        p_dir = os.path.dirname(os.path.abspath(p))
-        with open(p, 'r', encoding='utf-8', errors='ignore') as f:
-            for line in f:
-                s = line.strip()
-                if not s or s.startswith('#EXTM3U'):
-                    continue
-                if s.startswith('#'):
-                    cur_comments.append(s)
-                else:
-                    resolved = resolve_track_file(s, p_dir)
-                    entries.append({
-                        'raw': s,
-                        'resolved': resolved,
-                        'comments': list(cur_comments)
-                    })
-                    cur_comments.clear()
+        for e in parse_playlist_file(p):
+            if e.is_comment:
+                if not e.raw.startswith('#EXTM3U'):
+                    cur_comments.append(e.raw)
+            elif e.track_path:
+                entries.append({
+                    'raw': e.track_path,
+                    'resolved': e.resolved_path,
+                    'comments': list(cur_comments)
+                })
+                cur_comments.clear()
         return entries
 
     entries_1 = read_playlist_entries(pl1_path)

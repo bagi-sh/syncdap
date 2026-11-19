@@ -4,50 +4,12 @@
 # ==============================================================================
 
 import os
-from share import resolve_track_file
+from share import resolve_track_file, update_all_playlists
 
 
 def update_playlists(old_rel_path, new_rel_path):
     """Replace references from old_rel_path to new_rel_path in all .m3u8 and .m3u files."""
-    candidate_dirs = []
-    if os.path.isdir('../Playlists'):
-        candidate_dirs.append('../Playlists')
-    if os.path.isdir('Playlists'):
-        candidate_dirs.append('Playlists')
-    home_pl = os.path.expanduser('~/Playlists')
-    if os.path.isdir(home_pl) and os.path.abspath(home_pl) not in [os.path.abspath(d) for d in candidate_dirs]:
-        candidate_dirs.append(home_pl)
-
-    if not candidate_dirs:
-        return
-
-    old_norm = os.path.normpath(old_rel_path)
-    new_norm = os.path.normpath(new_rel_path)
-
-    for pdir in candidate_dirs:
-        for pfile in os.listdir(pdir):
-            if pfile.lower().endswith(('.m3u8', '.m3u')):
-                pl_path = os.path.join(pdir, pfile)
-                try:
-                    with open(pl_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-
-                    changed = False
-                    if f"../Music/{old_norm}" in content:
-                        content = content.replace(f"../Music/{old_norm}", f"../Music/{new_norm}")
-                        changed = True
-                    if f"../{old_norm}" in content:
-                        content = content.replace(f"../{old_norm}", f"../{new_norm}")
-                        changed = True
-                    if old_norm in content:
-                        content = content.replace(old_norm, new_norm)
-                        changed = True
-
-                    if changed:
-                        with open(pl_path, 'w', encoding='utf-8') as f:
-                            f.write(content)
-                except Exception:
-                    pass
+    update_all_playlists({old_rel_path: new_rel_path})
 
 
 def handle_playlist_patch(pl_path, target_format, keep_old, dry_run, temp_dir, js_args, threads, assume_yes):

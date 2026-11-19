@@ -7,8 +7,8 @@ import os
 import uuid
 import shutil
 import subprocess
-import mutagen
 
+from share import is_valid_audio
 from .metadata import extract_metadata_from_file, transfer_tags_to_file
 from .playlist import update_playlists
 
@@ -75,13 +75,12 @@ def upgrade_track(idx, total, old_file, target_format, keep_old, dry_run, temp_d
         if res.returncode == 0 and os.path.isfile(temp_target) and os.path.getsize(temp_target) > 2048:
             success = True
 
-    # Strategy 3: Search fallback via yt-dlp
+    # Strategy 3: Search fallback via yt-dlp with candidate scoring
     if not success and artist and title:
-        search_query = f"ytsearch1:{artist} - {title}"
-        if album:
-            search_query += f" {album}"
+        from modules.fallback import find_best_candidate_url
+        target_source = find_best_candidate_url(artist, title, expected_dur=None, js_args=js_args)
         cmd = [
-            'yt-dlp', search_query,
+            'yt-dlp', target_source,
             '--no-playlist',
             *js_args,
             '-x', '--audio-format', ytdlp_fmt,
@@ -92,13 +91,8 @@ def upgrade_track(idx, total, old_file, target_format, keep_old, dry_run, temp_d
         if res.returncode == 0 and os.path.isfile(temp_target) and os.path.getsize(temp_target) > 2048:
             success = True
 
-    if success:
-        try:
-            test_audio = mutagen.File(temp_target)
-            if test_audio is None or getattr(test_audio.info, 'length', 0) <= 0:
-                success = False
-        except Exception:
-            success = False
+    if success and not is_valid_audio(temp_target):
+        success = False
 
     if not success:
         if os.path.isfile(temp_target):

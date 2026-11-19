@@ -5,6 +5,7 @@
 
 from pathlib import Path
 
+from share import resolve_track_file
 from .translit import AUDIO_EXTENSIONS, contains_japanese, to_romaji
 
 
@@ -13,37 +14,8 @@ def resolve_playlist_track(line: str, playlist_path: Path, root_dir: Path) -> Pa
     line = line.strip()
     if not line or line.startswith("#"):
         return None
-
-    clean_line = line.lstrip("/\\")
-    if clean_line.startswith("sdcard/"):
-        clean_line = clean_line[7:]
-
-    # 1. Relative to root directory
-    p1 = (root_dir / clean_line).resolve()
-    if p1.exists():
-        return p1
-
-    # 2. Check if clean_line inside root_dir/Music
-    p2 = (root_dir / "Music" / clean_line).resolve()
-    if p2.exists():
-        return p2
-
-    # 3. Relative to playlist directory
-    p3 = (playlist_path.parent / line).resolve()
-    if p3.exists():
-        return p3
-
-    # 4. Check ../Music/ prefix relative to playlist dir
-    if line.startswith('../Music/'):
-        p4 = (playlist_path.parent / line).resolve()
-        if p4.exists():
-            return p4
-        cand = (root_dir / line[3:]).resolve()
-        if cand.exists():
-            return cand
-        return cand
-
-    return p1
+    res = resolve_track_file(line, playlist_dir=str(playlist_path.parent), music_roots=[str(root_dir)])
+    return Path(res)
 
 
 def collect_files_from_playlist(playlist_path: Path, root_dir: Path) -> list[Path]:

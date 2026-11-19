@@ -133,3 +133,23 @@ def embed_lyrics_into_file(audio_path: str, lrc_text: str) -> bool:
         return False
 
     return False
+
+
+def is_lrc_synced(lrc_path_or_content: str) -> bool:
+    """Check if .lrc file or text contains synced timestamp lines ([mm:ss])."""
+    if not lrc_path_or_content:
+        return False
+    import re
+    if os.path.isfile(lrc_path_or_content):
+        try:
+            with open(lrc_path_or_content, 'r', encoding='utf-8', errors='ignore') as f:
+                for line in f:
+                    if re.match(r'^\s*\[\d{2}:\d{2}', line):
+                        return True
+        except Exception:
+            pass
+        return False
+    for line in lrc_path_or_content.splitlines():
+        if re.match(r'^\s*\[\d{2}:\d{2}', line):
+            return True
+    return False

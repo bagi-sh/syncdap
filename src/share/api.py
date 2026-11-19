@@ -13,7 +13,7 @@ import urllib.request
 _UA = 'SyncDAP/1.0'
 _UA_MB = 'SyncDAP/1.0 (info@syncdap.local)'
 
-# Suffixes to strip from album names before API search
+from .text import clean_term
 _ALBUM_EDITION_RE = re.compile(
     r'\s*[\(\[,]\s*(?:deluxe|deluxe edition|super deluxe|remastered|remaster|'
     r'expanded|anniversary|bonus tracks?|special edition|limited edition|'
@@ -267,3 +267,143 @@ def get_album_tracklist(artist: str, album: str) -> list[dict] | None:
             return result
 
     return None
+
+
+# ==============================================================================
+# Multi-Provider Genre Resolution (iTunes -> Deezer -> MusicBrainz)
+# ==============================================================================
+
+def itunes_genre(artist: str, album: str) -> str | None:
+    """Query iTunes for album or artist primary genre name."""
+    ca = clean_term(artist)
+    calb = clean_term(album)
+
+    if ca and calb:
+        try:
+            results = itunes_search(f"{ca} {calb}", entity="album", limit=1)
+            if results and results[0].get("primaryGenreName"):
+                return results[0]["primaryGenreName"]
+        except Exception:
+            pass
+
+    if ca:
+        try:
+            results = itunes_search(ca, entity="musicArtist", limit=1)
+            if results and results[0].get("primaryGenreName"):
+                return results[0]["primaryGenreName"]
+        except Exception:
+            pass
+
+    return None
+
+
+def deezer_genre(artist: str, album: str) -> str | None:
+    """Query Deezer API for album or artist genre."""
+    headers = {'User-Agent': 'Mozilla/5.0 (SyncDAP/1.0)'}
+    ca = clean_term(artist)
+    calb = clean_term(album)
+
+    if ca and calb:
+        try:
+            q = f"{ca} {calb}".strip()
+            url = "https://api.deezer.com/search/album?" + urllib.parse.urlencode({"q": q, "limit": 1})
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=5) as r:
+                data = json.loads(r.read().decode('utf-8', errors='ignore'))
+                res = data.get("data", [])
+                if res and res[0].get("id"):
+                    alb_id = res[0]["id"]
+                    req2 = urllib.request.Request(f"https://api.deezer.com/album/{alb_id}", headers=headers)
+                    with urllib.request.urlopen(req2, timeout=5) as r2:
+                        d2 = json.loads(r2.read().decode('utf-8', errors='ignore'))
+                        genres = d2.get("genres", {}).get("data", [])
+                        if genres and genres[0].get("name"):
+                            return genres[0]["name"]
+        except Exception:
+            pass
+
+    if ca:
+        try:
+            url = "https://api.deezer.com/search/artist?" + urllib.parse.urlencode({"q": ca, "limit": 1})
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=5) as r:
+                data = json.loads(r.read().decode('utf-8', errors='ignore'))
+                res = data.get("data", [])
+                if res and res[0].get("id"):
+                    art_id = res[0]["id"]
+                    req2 = urllib.request.Request(f"https://api.deezer.com/artist/{art_id}/albums", headers=headers)
+                    with urllib.request.urlopen(req2, timeout=5) as r2:
+                        d2 = json.loads(r2.read().decode('utf-8', errors='ignore'))
+                        albs = d2.get("data", [])
+                        if albs and albs[0].get("id"):
+                            first_alb = albs[0]["id"]
+                            req3 = urllib.request.Request(f"https://api.deezer.com/album/{first_alb}", headers=headers)
+                            with urllib.request.urlopen(req3, timeout=5) as r3:
+                                d3 = json.loads(r3.read().decode('utf-8', errors='ignore'))
+                                genres = d3.get("genres", {}).get("data", [])
+                                if genres and genres[0].get("name"):
+                                    return genres[0]["name"]
+        except Exception:
+            pass
+
+    return None
+
+
+def musicbrainz_genre(artist: str, album: str) -> str | None:
+    """Query MusicBrainz API for album or artist genre."""
+    ca = clean_term(artist)
+    calb = clean_term(album)
+
+    if ca and calb:
+        try:
+            q = f'artist:"{ca}" AND release:"{calb}"'
+            url = "https://musicbrainz.org/ws/2/release/?query=" + urllib.parse.quote(q) + "&fmt=json&limit=1"
+            d = _mb_get(url)
+            rels = d.get("releases", [])
+            if rels:
+                tags = rels[0].get("tags", [])
+                genres = rels[0].get("genres", [])
+                all_tags = (genres or []) + (tags or [])
+                if all_tags:
+                    best = max(all_tags, key=lambda t: t.get("count", 0))
+                    return best.get("name", "").title()
+        except Exception:
+            pass
+
+    if ca:
+        try:
+            url = "https://musicbrainz.org/ws/2/artist/?query=" + urllib.parse.quote(ca) + "&fmt=json&limit=2"
+            d = _mb_get(url)
+            arts = d.get("artists", [])
+            if arts:
+                genres = arts[0].get("genres", []) or []
+                tags = arts[0].get("tags", []) or []
+                all_tags = genres + tags
+                if all_tags:
+                    best = max(all_tags, key=lambda t: t.get("count", 0))
+                    return best.get("name", "").title()
+        except Exception:
+            pass
+
+    return None
+
+
+_genre_cache: dict[str, str | None] = {}
+
+def resolve_online_genre(artist: str, album: str) -> str | None:
+    """
+    Resolve genre across iTunes -> Deezer -> MusicBrainz with memory cache.
+    Returns genre name string or None.
+    """
+    key = f"{artist.strip().lower()} - {album.strip().lower()}"
+    if key in _genre_cache:
+        return _genre_cache[key]
+
+    res = itunes_genre(artist, album)
+    if not res:
+        res = deezer_genre(artist, album)
+    if not res:
+        res = musicbrainz_genre(artist, album)
+
+    _genre_cache[key] = res
+    return res

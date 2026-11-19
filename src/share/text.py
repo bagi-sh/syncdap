@@ -146,3 +146,26 @@ def parse_timestamp_to_seconds(ts_str: str) -> float | None:
     except (ValueError, TypeError):
         return None
     return None
+
+
+def format_duration(seconds: float | None) -> str:
+    """Format duration in seconds to standard M:SS or H:MM:SS string."""
+    if seconds is None or seconds < 0:
+        return "--:--"
+    m, s = divmod(int(round(seconds)), 60)
+    h, m = divmod(m, 60)
+    if h > 0:
+        return f"{h:d}:{m:02d}:{s:02d}"
+    return f"{m:02d}:{s:02d}"
+
+
+def format_bytes(num_bytes: float | int) -> str:
+    """Format byte size into human readable string (KB, MB, GB, TB)."""
+    if num_bytes is None or num_bytes < 0:
+        return "0 B"
+    val = float(num_bytes)
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if val < 1024.0:
+            return f"{val:.2f} {unit}"
+        val /= 1024.0
+    return f"{val:.2f} PB"

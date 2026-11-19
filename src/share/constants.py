@@ -9,6 +9,9 @@ AUDIO_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav')
 LOSSLESS_EXTENSIONS = ('.flac', '.wav', '.aiff', '.ape', '.alac')
 LOSSY_EXTENSIONS = ('.m4a', '.opus', '.ogg', '.mp3')
 
+# Standard cover art filenames recognized across modules and players
+COVER_FILENAMES = ('cover.jpg', 'cover.jpeg', 'cover.png', 'folder.jpg', 'folder.jpeg', 'folder.png')
+
 # System, filesystem, and player directories to ignore during library traversal
 IGNORED_DIRS = {
     'lost.dir',

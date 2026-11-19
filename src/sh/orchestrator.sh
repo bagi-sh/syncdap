@@ -145,26 +145,38 @@ orchestrate_embed_lyrics() {
     run_py "$SCRIPT_DIR/src/modules/lyrics.py" "$dirs_file" "$THREADS" "$SYNCED_ONLY" --embed
 }
 
-# --- ALBUM SPLITTER ORCHESTRATION ---
-orchestrate_split() {
-    local target_file="$SPLIT_FILE"
-    if [ -z "$target_file" ] || [ ! -f "$target_file" ]; then
-        echo -e "${RED}❌ Error: --split requires a valid audio file path.${RESET}" >&2
-        exit 1
+# --- ALBUM EXPANDER ORCHESTRATION ---
+orchestrate_expand_albums() {
+    local music_root
+    music_root="$(resolve_music_root)"
+    local target_file="${EXPAND_TARGET:-$SPLIT_FILE}"
+
+    local expand_args=("-r" "$music_root" "-t" "$THREADS")
+    [ "$DRY_RUN" = true ] && expand_args+=(--dry-run)
+    [ "$ASSUME_YES" = true ] && expand_args+=(--yes)
+    [ -n "$AUDIO_FORMAT" ] && expand_args+=("-F" "$AUDIO_FORMAT")
+    [ "$SYNCED_ONLY" = true ] && expand_args+=(--synced-only)
+
+    if [ -n "$target_file" ]; then
+        if [ ! -f "$target_file" ]; then
+            echo -e "${RED}❌ Error: Specified file does not exist: $target_file${RESET}" >&2
+            exit 1
+        fi
+        expand_args+=("$target_file")
     fi
 
-    local split_args=("$target_file")
-    [ -n "$CUE_FILE" ] && split_args+=(--cue "$CUE_FILE")
-    [ -n "$TRACKLIST_FILE" ] && split_args+=(--tracklist "$TRACKLIST_FILE")
+    run_py "$SCRIPT_DIR/src/modules/album_expander.py" "${expand_args[@]}"
+}
 
-    run_py "$SCRIPT_DIR/src/modules/split.py" "${split_args[@]}"
+orchestrate_split() {
+    orchestrate_expand_albums
 }
 
 # --- DURATION ANOMALY AUDITOR ORCHESTRATION ---
 orchestrate_audit_duration() {
     local music_root
     music_root="$(resolve_music_root)"
-    run_py "$SCRIPT_DIR/src/modules/audit.py" -r "$music_root"
+    run_py "$SCRIPT_DIR/src/modules/audit.py" -r "$music_root" --auto-expand
 }
 
 # --- NAME SEARCH & RESOLUTION ORCHESTRATION ---

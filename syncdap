@@ -40,9 +40,9 @@ main() {
         exit $?
     fi
 
-    # Mode: Album Splitter Mode
-    if [ "$SPLIT_MODE" = true ]; then
-        orchestrate_split
+    # Mode: Album Expander / Unbundling Mode
+    if [ "$EXPAND_ALBUMS_MODE" = true ] || [ "$SPLIT_MODE" = true ]; then
+        orchestrate_expand_albums
         exit $?
     fi
 

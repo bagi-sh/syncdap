@@ -24,7 +24,8 @@ Commands:
   -l, --lyrics                 Scan and download missing timestamped .lrc lyrics
   -s, --status                 Show music library health and statistics dashboard
   -f, --fallback [URL]         Direct yt-dlp rescue (or retry erros.spotdl)
-  --split <FILE>               Split single-file full album into individual tracks
+  --expand-albums [FILE]       Expand bundled full-album rip(s) into individual tagged tracks via re-download
+  --unbundle [FILE]            Alias for --expand-albums
   --audit-duration             Audit library tracks >10m to detect accidental full-album rips
   --embed-lyrics               Scan library and embed lyrics directly into audio metadata
   --search <QUERY>             Search track/album by name without URL
@@ -221,9 +222,11 @@ parse_arguments() {
                     shift 1
                 fi
                 ;;
-            --split)
+            --expand-albums|--unbundle|--split)
+                EXPAND_ALBUMS_MODE=true
                 SPLIT_MODE=true
                 if [[ $# -gt 1 ]] && ! [[ "$2" =~ ^- ]]; then
+                    EXPAND_TARGET="$2"
                     SPLIT_FILE="$2"
                     shift 2
                 else
@@ -284,8 +287,13 @@ parse_arguments() {
                 elif [ "$ROMAJI_MODE" = true ] && [ -z "$ROMAJI_TARGET" ]; then
                     ROMAJI_TARGET="$1"
                     shift 1
+                elif [ "$EXPAND_ALBUMS_MODE" = true ] && [ -z "$EXPAND_TARGET" ]; then
+                    EXPAND_TARGET="$1"
+                    SPLIT_FILE="$1"
+                    shift 1
                 elif [ "$SPLIT_MODE" = true ] && [ -z "$SPLIT_FILE" ]; then
                     SPLIT_FILE="$1"
+                    EXPAND_TARGET="$1"
                     shift 1
                 elif [ -z "$RAW_URL" ] && [ -z "$SEARCH_QUERY" ]; then
                     SEARCH_QUERY="$1"
@@ -339,7 +347,7 @@ parse_arguments() {
        [ "$OPTIMIZE_ALL" = false ] && [ "$EMBED_ALL" = false ] && \
        [ "$GENRES_ALL" = false ] && [ "$FETCH_LYRICS" = false ] && [ "$FALLBACK_ONLY" = false ] && \
        [ "$DEDUP_MODE" = false ] && [ "$FIX_TAGS_MODE" = false ] && [ "$STATUS_MODE" = false ] && \
-       [ "$REPAIR_PLAYLISTS_MODE" = false ] && [ "$SPLIT_MODE" = false ] && \
+       [ "$REPAIR_PLAYLISTS_MODE" = false ] && [ "$EXPAND_ALBUMS_MODE" = false ] && [ "$SPLIT_MODE" = false ] && \
        [ "$AUDIT_DURATION_MODE" = false ] && [ "$EMBED_LYRICS_MODE" = false ] && \
        [ -z "$SEARCH_QUERY" ] && [ -z "$CLEAN_URL" ]; then
         echo -e "${RED}❌ Error: No valid action or URL specified.${RESET}"

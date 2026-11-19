@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
 # Module: src/modules/audit.py
-# Purpose: Audit library files >10min against iTunes/MusicBrainz to detect accidental full-album rips
+# Purpose: Audit library files >10 min against iTunes/MusicBrainz to detect
+#          accidental full-album rips.
 # ==============================================================================
 
 import argparse
@@ -9,60 +10,8 @@ import json
 import os
 import subprocess
 import sys
-import time
-import urllib.parse
-import urllib.request
 
-from share import find_audio_files, get_audio_metadata
-
-
-def check_api_duration(artist: str, title: str) -> tuple[float | None, str | None]:
-    """
-    Query iTunes Search API with fallback to MusicBrainz to find canonical track duration.
-    Returns (duration_in_seconds, source_name).
-    """
-    if not artist or not title:
-        return None, None
-
-    # 1. iTunes Search API (fast, reliable, high rate limit)
-    try:
-        query = f"{artist} {title}"
-        url = "https://itunes.apple.com/search?" + urllib.parse.urlencode({
-            'term': query,
-            'entity': 'song',
-            'limit': 5
-        })
-        req = urllib.request.Request(url, headers={'User-Agent': 'SyncDAP/1.0'})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            for r in data.get('results', []):
-                r_artist = r.get('artistName', '').lower()
-                dur_ms = r.get('trackTimeMillis')
-                if dur_ms and (artist.lower() in r_artist or r_artist in artist.lower()):
-                    return dur_ms / 1000.0, "iTunes"
-    except Exception:
-        pass
-
-    # 2. MusicBrainz API fallback (throttled, authoritative)
-    try:
-        time.sleep(1.0)  # respect 1 req/sec policy
-        mb_query = f'recording:"{title}" AND artist:"{artist}"'
-        url = "https://musicbrainz.org/ws/2/recording/?" + urllib.parse.urlencode({
-            'query': mb_query,
-            'fmt': 'json',
-            'limit': 3
-        })
-        req = urllib.request.Request(url, headers={'User-Agent': 'SyncDAP/1.0 (info@syncdap.local)'})
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            for r in data.get('recordings', []):
-                dur_ms = r.get('length')
-                if dur_ms:
-                    return dur_ms / 1000.0, "MusicBrainz"
-    except Exception:
-        pass
-
-    return None, None
+from share import find_audio_files, get_audio_metadata, get_track_duration
 
 
 def format_duration(seconds: float) -> str:
@@ -104,23 +53,23 @@ def audit_long_tracks(
     print("-" * 95)
 
     suspect_paths: list[str] = []
-    suspect_count = 0
+    suspect_count  = 0
     verified_count = 0
-    unknown_count = 0
+    unknown_count  = 0
 
     for fpath, meta, local_dur in long_tracks:
         artist = meta.get('artist') or "Unknown Artist"
-        title = meta.get('title') or os.path.basename(fpath)
+        title  = meta.get('title') or os.path.basename(fpath)
         track_label = f"{artist} - {title}"
         if len(track_label) > 38:
             track_label = track_label[:35] + "..."
 
-        expected_dur, source = check_api_duration(artist, title)
+        expected_dur, source = get_track_duration(artist, title)
 
         if expected_dur is not None and expected_dur > 0:
-            ratio = local_dur / expected_dur
+            ratio     = local_dur / expected_dur
             local_fmt = format_duration(local_dur)
-            exp_fmt = format_duration(expected_dur)
+            exp_fmt   = format_duration(expected_dur)
 
             if ratio > 1.5:
                 status = "🚨 FULL-ALBUM RIP"
@@ -136,15 +85,15 @@ def audit_long_tracks(
             print(f"{status:<20} | {local_fmt:<9} | {exp_fmt:<9} | {ratio:<6.1f}x | {track_label:<40}")
 
             if ratio > 1.5:
-                print(f"   ↳ Suggestion: syncdap --split \"{fpath}\"")
+                print(f"   ↳ Suggestion: syncdap --expand-albums \"{fpath}\"")
                 if auto_split:
-                    print(f"   ⚡ Auto-splitting: {fpath}")
-                    split_script = os.path.join(os.path.dirname(__file__), "split.py")
+                    print(f"   ⚡ Auto-expanding: {fpath}")
+                    expander_script = os.path.join(os.path.dirname(__file__), "album_expander.py")
                     try:
-                        subprocess.run([sys.executable, split_script, fpath], check=True)
-                        print(f"   ✅ Auto-split complete.")
+                        subprocess.run([sys.executable, expander_script, "-y", fpath], check=True)
+                        print(f"   ✅ Auto-expansion complete.")
                     except subprocess.CalledProcessError as e:
-                        print(f"   ⚠️  Auto-split failed: {e}")
+                        print(f"   ⚠️  Auto-expansion failed: {e}")
         else:
             unknown_count += 1
             local_fmt = format_duration(local_dur)
@@ -159,7 +108,7 @@ def audit_long_tracks(
     return suspect_paths, verified_count, suspect_count, unknown_count
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Audit library tracks >10 min to detect accidental full-album rips."
     )
@@ -170,8 +119,8 @@ def main():
     )
     parser.add_argument("--json", action="store_true", help="Output suspect file paths as JSON array.")
     parser.add_argument(
-        "--auto-split", action="store_true",
-        help="Automatically run splitter on 100%% sure full-album rips (ratio > 1.5x)."
+        "--auto-expand", "--auto-split", action="store_true", dest="auto_split",
+        help="Automatically expand 100%% sure full-album rips (ratio > 1.5x) via re-download."
     )
     args = parser.parse_args()
 

@@ -31,6 +31,8 @@
 - **Japanese Transliteration (Hepburn Romaji)**: Convert Japanese Kanji, Hiragana, and Katakana tags, folder trees, filenames, and `.lrc` synced lyrics to Hepburn Romaji.
 - **Playlist Health & Repair**: Relink moved or renamed audio files, prune dead entries, merge playlists, and manage tracks with interactive terminal menus.
 - **Fidelity Deduplication**: Detect duplicate tracks across formats and automatically keep the highest audio quality (FLAC > WAV > M4A > OPUS > OGG > MP3).
+- **Orchestrated Album Unbundling (`--expand-albums`)**: Detect single-file full-album rips (anomalies where track duration drastically exceeds expected single track length), resolve the official release tracklist, and automatically re-download individual tracks with quality-aware file selection, synced `.lrc` lyrics, Rockbox tag normalization, directory-level cover extraction, and 1-to-N playlist `.m3u8` updates.
+- **Duration & Rip Auditor (`--audit-duration`)**: Scan library tracks >= 10 minutes against iTunes and MusicBrainz APIs to detect accidental full-album rips with auto-expansion support.
 - **Diagnostics & Metrics**: Generate comprehensive library health reports, format distributions, and storage analytics.
 
 ---
@@ -97,8 +99,12 @@ syncdap [COMMAND] [OPTIONS] [TARGET]
 | `--repair-playlists` | None | Audit playlist files, relinking renamed tracks and pruning dead links. |
 | `-g`, `--genres` | None | Enrich genre tags via iTunes, Deezer, and MusicBrainz. |
 | `-l`, `--lyrics` | None | Scan and download missing timestamped `.lrc` lyric files. |
+| `--embed-lyrics` | None | Scan library and embed lyrics directly into audio metadata. |
 | `-s`, `--status` | None | Display terminal dashboard with library statistics and health metrics. |
 | `-f`, `--fallback` | `[URL]` | Run yt-dlp fallback recovery directly, or rescue tracks from `erros.spotdl`. |
+| `--expand-albums`, `--unbundle` | `[FILE]` | Expand bundled full-album rip(s) into individual tagged tracks via re-download. |
+| `--audit-duration` | None | Audit library tracks >= 10m against iTunes/MusicBrainz to detect full-album rips. |
+| `--search` | `QUERY` | Search track or album by name without requiring a Spotify URL. |
 | `--update` | None | Pull latest remote commits and update syncdap and dependencies. |
 | `--uninstall` | None | Completely remove syncdap from the system. |
 
@@ -151,6 +157,17 @@ syncdap --optimize
 syncdap --repair-playlists
 ```
 
+#### Expand bundled full-album rips into authentic individual tracks
+```bash
+syncdap --expand-albums
+syncdap --expand-albums "/run/media/bagi/DAP/Music/Artist/Album/FullAlbum.mp3"
+```
+
+#### Audit library tracks for duration anomalies and accidental full-album rips
+```bash
+syncdap --audit-duration
+```
+
 #### Display library health dashboard
 ```bash
 syncdap --status
@@ -166,6 +183,8 @@ syncdap/
 ├── install.sh              # Standalone installer, updater, and uninstaller
 ├── src/
 │   ├── modules/            # Standalone media processing modules
+│   │   ├── album_expander.py # Orchestrated album unbundling and expansion
+│   │   ├── audit.py        # Library duration and full-album rip auditor
 │   │   ├── covers.py       # Album artwork extraction and embedding
 │   │   ├── dedup.py        # Quality-aware library deduplication
 │   │   ├── fallback.py     # Resilient yt-dlp metadata and stream rescue
@@ -173,6 +192,7 @@ syncdap/
 │   │   ├── lyrics.py       # Missing lyric scanner and fetcher
 │   │   ├── playlist_repair.py # Playlist auditor and dead link pruner
 │   │   ├── rockbox_tags.py # Rockbox database tag normalizer
+│   │   ├── search.py       # Search and download by track/album name
 │   │   └── stats.py        # Library analytics reporter
 │   ├── patch/              # Audio quality patching package
 │   │   ├── metadata.py     # Audio tag extraction and transfer
@@ -199,11 +219,12 @@ syncdap/
 │   │   ├── orchestrator.sh # Submodule execution dispatchers
 │   │   └── playlists.sh    # Post-download playlist path normalization
 │   └── share/              # Core shared utilities and constants
+│       ├── api.py          # iTunes and MusicBrainz metadata APIs
 │       ├── constants.py    # Audio formats, lossless/lossy sets, ignored folders
 │       ├── text.py         # Normalization, string sanitization, filename parsing
 │       ├── lyrics.py       # Shared LRCLIB and syncedlyrics query provider
-│       ├── audio.py        # Mutagen metadata inspection, library walking
-│       └── playlists.py    # Common playlist candidate search & path mapping
+│       ├── audio.py        # Mutagen metadata inspection, library walking, quality scoring
+│       └── playlists.py    # Common playlist candidate search, path mapping & 1-to-N patching
 ├── LICENSE                 # GNU General Public License v2.0
 ├── .gitignore              # Repository ignore definitions
 └── README.md

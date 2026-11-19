@@ -6,9 +6,11 @@
 
 import sys
 import os
+import re
 import json
 import uuid
 import shutil
+import tempfile
 import urllib.request
 import urllib.parse
 import subprocess
@@ -50,18 +52,17 @@ def score_video_candidate(cand: dict, artist: str, title: str, expected_dur: flo
         if re.search(pat, c_title):
             return -999
 
-    # 2. Duration check against expected length
+    # 2. Duration check against expected length (strict tolerance filter)
     if expected_dur and expected_dur > 0:
-        if dur > 1.4 * expected_dur:
+        if abs(dur - expected_dur) > 25:
             return -999
-        if dur < 0.6 * expected_dur:
-            score -= 80
+        diff = abs(dur - expected_dur)
+        if diff <= 5:
+            score += 40
+        elif diff <= 15:
+            score += 25
         else:
-            diff = abs(dur - expected_dur)
-            if diff <= 5:
-                score += 35
-            elif diff <= 15:
-                score += 20
+            score += 10
     elif dur > 720:  # If duration unknown but exceeds 12 minutes, penalize heavily
         score -= 150
 
@@ -82,7 +83,7 @@ def score_video_candidate(cand: dict, artist: str, title: str, expected_dur: flo
     # 5. Channel affinity & Topic channel boost
     art_clean = artist.lower()
     if channel.endswith(' - topic'):
-        score += 60
+        score += 70
     elif art_clean in channel or channel in art_clean:
         score += 40
 
@@ -96,7 +97,8 @@ def find_best_candidate_url(artist: str, title: str, expected_dur: float | None,
                             js_args: list[str], allow_live: bool = False,
                             allow_remix: bool = False) -> str:
     """Query top 5 candidates via yt-dlp and return the highest-scoring candidate URL."""
-    search_query = f"ytsearch5:{artist} - {title}"
+    neg_filter = '-"full album" -"álbum completo" -"discography"'
+    search_query = f"ytsearch5:{artist} - {title} {neg_filter}"
     cmd = ['yt-dlp', '--flat-playlist', '--dump-json', *js_args, search_query]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=12)
@@ -120,7 +122,7 @@ def find_best_candidate_url(artist: str, title: str, expected_dur: float | None,
     except Exception:
         pass
 
-    return f"ytsearch1:{artist} - {title}"
+    return f"ytsearch1:{artist} - {title} {neg_filter}"
 
 
 def sanitize(name):
@@ -308,6 +310,93 @@ def rescue_track(idx, total, d, temp_dir, target_m3u, target_ext, js_args, synce
         with lock:
             print(f"   [{idx}/{total}] ❌ Could not retrieve audio for: {artist} - {title}")
         return False
+
+
+def rescue_single_track(
+    artist: str,
+    album: str,
+    title: str,
+    track_num: int | str = 1,
+    tracks_count: int | str = "",
+    year: str = "",
+    genre: str = "",
+    cover_url: str = "",
+    expected_duration: float | None = None,
+    output_path: str | None = None,
+    target_ext: str = "mp3",
+    js_args: list[str] | None = None,
+    synced_only: bool = False,
+) -> bool:
+    """
+    Download a single track using candidate scoring and metadata tagging.
+    If output_path is provided, outputs directly to that path.
+    Returns True if file was retrieved and validated, False otherwise.
+    """
+    js_args = js_args or []
+    c_artist = sanitize(artist or "Unknown Artist")
+    c_album = sanitize(album or "Unknown Album")
+    c_title = sanitize(title or "Untitled")
+
+    try:
+        t_num = f"{int(track_num):02d}"
+    except (ValueError, TypeError):
+        t_num = "01"
+
+    t_count = str(tracks_count) if tracks_count else ""
+    t_year = str(year) if year else ""
+    t_genre = str(genre).title() if genre else ""
+
+    if output_path:
+        final_audio = os.path.abspath(output_path)
+        album_dir = os.path.dirname(final_audio)
+    else:
+        album_dir = os.path.abspath(os.path.join(c_artist, c_album))
+        final_audio = os.path.join(album_dir, f"{t_num} {c_title} - {c_artist}.{target_ext}")
+
+    os.makedirs(album_dir, exist_ok=True)
+    base_no_ext, _ = os.path.splitext(final_audio)
+    final_lrc = f"{base_no_ext}.lrc"
+    cover_jpg = os.path.join(album_dir, "cover.jpg")
+
+    if os.path.exists(final_audio) and os.path.getsize(final_audio) > 0:
+        if not os.path.exists(final_lrc):
+            fetch_lyrics(c_artist, c_title, c_album, expected_duration, final_lrc, synced_only)
+        return True
+
+    temp_dir = tempfile.mkdtemp(prefix="syncdap_single_")
+    try:
+        temp_base = os.path.join(temp_dir, f"track_{uuid.uuid4().hex}")
+        temp_dest = f"{temp_base}.{target_ext}"
+        ytdlp_fmt = 'vorbis' if target_ext == 'ogg' else target_ext
+
+        target_source = find_best_candidate_url(c_artist, c_title, expected_duration, js_args)
+        cmd = [
+            'yt-dlp',
+            target_source,
+            '--no-playlist',
+            *js_args,
+            '-x', '--audio-format', ytdlp_fmt,
+            '--audio-quality', '0',
+            '-o', f"{temp_base}.%(ext)s"
+        ]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        if os.path.exists(temp_dest) and os.path.getsize(temp_dest) > 0:
+            if not os.path.exists(cover_jpg) and cover_url:
+                try:
+                    urllib.request.urlretrieve(cover_url, cover_jpg)
+                except Exception:
+                    pass
+
+            tag_audio_file(temp_dest, c_artist, c_album, c_title, t_num, t_count, t_year, t_genre, cover_jpg)
+            shutil.move(temp_dest, final_audio)
+
+            fetch_lyrics(c_artist, c_title, c_album, expected_duration, final_lrc, synced_only)
+            return True
+        return False
+    finally:
+        if os.path.isdir(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def main():

@@ -14,14 +14,6 @@ import argparse
 from collections import defaultdict
 from pathlib import Path
 
-import mutagen
-from mutagen.flac import FLAC
-from mutagen.mp3 import MP3
-from mutagen.mp4 import MP4
-from mutagen.oggvorbis import OggVorbis
-from mutagen.oggopus import OggOpus
-from mutagen.wave import WAVE
-
 from share import (
     AUDIO_EXTENSIONS,
     IGNORED_DIRS,
@@ -29,90 +21,9 @@ from share import (
     find_audio_files,
     parse_filename_metadata as extract_track_info,
     get_all_playlist_files as find_playlist_files,
+    get_audio_quality_score,
+    update_all_playlists,
 )
-
-
-def get_audio_quality_score(file_path):
-    """
-    Compute a numerical quality score for audio file.
-    Higher is better.
-    Lossless (FLAC, ALAC, WAV) > Lossy (AAC/M4A, OPUS, OGG, MP3).
-    Within lossy: Bitrate + format baseline.
-    Corrupted or 0-byte files return -1.
-    """
-    try:
-        size = os.path.getsize(file_path)
-        if size == 0:
-            return -1, "0-byte file"
-    except OSError:
-        return -1, "unreadable"
-
-    ext = os.path.splitext(file_path)[1].lower()
-
-    try:
-        audio = mutagen.File(file_path)
-        if audio is None:
-            return 0, f"unknown {ext}"
-
-        # 1. FLAC (Lossless)
-        if ext == '.flac' or isinstance(audio, FLAC):
-            sample_rate = getattr(audio.info, 'sample_rate', 44100) or 44100
-            bits = getattr(audio.info, 'bits_per_sample', 16) or 16
-            # Base 1,000,000 + bits * 10,000 + sample_rate
-            score = 1000000 + (bits * 10000) + sample_rate
-            return score, f"FLAC {bits}-bit {sample_rate}Hz"
-
-        # 2. WAV (Lossless)
-        if ext == '.wav' or isinstance(audio, WAVE):
-            sample_rate = getattr(audio.info, 'sample_rate', 44100) or 44100
-            bits = getattr(audio.info, 'bits_per_sample', 16) or 16
-            score = 900000 + (bits * 10000) + sample_rate
-            return score, f"WAV {bits}-bit {sample_rate}Hz"
-
-        # 3. M4A (ALAC Lossless or AAC Lossy)
-        if ext == '.m4a' or isinstance(audio, MP4):
-            # Check if ALAC
-            bitrate = getattr(audio.info, 'bitrate', 0) or 0
-            channels = getattr(audio.info, 'channels', 2) or 2
-            bitrate_kbps = bitrate // 1000 if bitrate else 0
-
-            # Mutagen MP4 info codec check
-            codec = getattr(audio.info, 'codec', '')
-            if 'alac' in str(codec).lower():
-                return 950000, "ALAC Lossless"
-
-            # AAC Lossy: base 500,000 + bitrate_kbps
-            if bitrate_kbps == 0 and getattr(audio.info, 'length', 0) > 0:
-                bitrate_kbps = int((size * 8) / (audio.info.length * 1000))
-
-            score = 500000 + bitrate_kbps
-            return score, f"M4A/AAC ~{bitrate_kbps}kbps"
-
-        # 4. OPUS
-        if ext == '.opus' or isinstance(audio, OggOpus):
-            bitrate = getattr(audio.info, 'bitrate', 0) or 0
-            bitrate_kbps = bitrate // 1000 if bitrate else 160
-            score = 450000 + bitrate_kbps
-            return score, f"OPUS ~{bitrate_kbps}kbps"
-
-        # 5. OGG Vorbis
-        if ext == '.ogg' or isinstance(audio, OggVorbis):
-            bitrate = getattr(audio.info, 'bitrate', 0) or 0
-            bitrate_kbps = bitrate // 1000 if bitrate else 192
-            score = 400000 + bitrate_kbps
-            return score, f"OGG ~{bitrate_kbps}kbps"
-
-        # 6. MP3
-        if ext == '.mp3' or isinstance(audio, MP3):
-            bitrate = getattr(audio.info, 'bitrate', 0) or 0
-            bitrate_kbps = bitrate // 1000 if bitrate else 320
-            score = 300000 + bitrate_kbps
-            return score, f"MP3 ~{bitrate_kbps}kbps"
-
-    except Exception as e:
-        return 10, f"error reading tags: {e}"
-
-    return 50, f"fallback {ext}"
 
 
 def group_duplicates(audio_files):
@@ -159,117 +70,6 @@ def group_duplicates(audio_files):
                 all_groups.append(group)
 
     return all_groups
-
-
-def resolve_playlist_line(line, pl_dir, music_roots):
-    """Resolve a raw playlist line to an absolute file path on disk."""
-    raw = line.strip()
-    if not raw or raw.startswith('#'):
-        return None
-
-    clean = raw.lstrip('/\\')
-    if clean.startswith('sdcard/'):
-        clean = clean[7:]
-    elif clean.startswith('Music/'):
-        clean = clean[6:]
-
-    # 1. Direct relative to playlist directory
-    p = os.path.normpath(os.path.join(pl_dir, raw))
-    if os.path.isfile(p):
-        return os.path.abspath(p)
-
-    # 2. Relative to parent of playlist directory (e.g. DAP root)
-    p_parent = os.path.normpath(os.path.join(os.path.dirname(pl_dir), clean))
-    if os.path.isfile(p_parent):
-        return os.path.abspath(p_parent)
-
-    # 3. Check within music roots
-    for root in music_roots:
-        cand1 = os.path.normpath(os.path.join(root, clean))
-        if os.path.isfile(cand1):
-            return os.path.abspath(cand1)
-        cand2 = os.path.normpath(os.path.join(root, 'Music', clean))
-        if os.path.isfile(cand2):
-            return os.path.abspath(cand2)
-
-    return os.path.abspath(p)
-
-
-def update_playlists(replacements, playlist_files, music_roots):
-    """
-    Update playlists substituting replaced/deleted audio paths with the winner path.
-    Also deduplicates duplicate entries within the playlist.
-    """
-    if not replacements or not playlist_files:
-        return 0
-
-    norm_replacements = {os.path.abspath(k): os.path.abspath(v) for k, v in replacements.items()}
-    updated_pl_count = 0
-
-    for pl_path in playlist_files:
-        pl_dir = os.path.dirname(pl_path)
-        try:
-            with open(pl_path, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = f.readlines()
-        except Exception:
-            continue
-
-        new_lines = []
-        has_changes = False
-        seen_tracks_in_pl = set()
-
-        for idx, line in enumerate(lines):
-            stripped = line.strip()
-            if not stripped:
-                continue
-
-            if stripped.startswith('#'):
-                new_lines.append(stripped)
-                continue
-
-            resolved = resolve_playlist_line(stripped, pl_dir, music_roots)
-            target_track = resolved
-
-            if resolved in norm_replacements:
-                target_track = norm_replacements[resolved]
-                has_changes = True
-
-            # If target_track was already added, skip duplicate entry in playlist
-            target_track_abs = os.path.abspath(target_track) if target_track else None
-            if target_track_abs in seen_tracks_in_pl:
-                # Remove preceding #EXTINF if present
-                if new_lines and new_lines[-1].startswith('#EXTINF'):
-                    new_lines.pop()
-                has_changes = True
-                continue
-
-            seen_tracks_in_pl.add(target_track_abs)
-
-            # Compute relative path from playlist dir to target_track
-            if os.path.isfile(target_track):
-                rel_path = os.path.relpath(target_track, pl_dir)
-                if rel_path != stripped:
-                    new_lines.append(rel_path)
-                    has_changes = True
-                else:
-                    new_lines.append(stripped)
-            else:
-                new_lines.append(stripped)
-
-        if has_changes:
-            try:
-                # Ensure #EXTM3U header
-                if not new_lines or not new_lines[0].startswith('#EXTM3U'):
-                    new_lines.insert(0, '#EXTM3U')
-
-                with open(pl_path, 'w', encoding='utf-8') as f:
-                    f.write('\n'.join(new_lines) + '\n')
-                updated_pl_count += 1
-                print(f"   [PLAYLIST UPDATED] {os.path.basename(pl_path)}")
-            except Exception as e:
-                print(f"   [PLAYLIST ERROR] Could not save {pl_path}: {e}", file=sys.stderr)
-
-    return updated_pl_count
 
 
 def run_deduplication(root_dir, dry_run=False):
@@ -368,7 +168,7 @@ def run_deduplication(root_dir, dry_run=False):
 
     playlists = find_playlist_files(search_dirs)
     print(f"\n📋 Updating playlists ({len(playlists)} found)...")
-    updated_pl = update_playlists(replacements, playlists, search_dirs)
+    updated_pl = update_all_playlists(replacements, playlist_files=playlists, music_roots=search_dirs)
 
     # Perform full playlist path recovery and dead link prune
     try:

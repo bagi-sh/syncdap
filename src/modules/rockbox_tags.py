@@ -15,25 +15,25 @@ import re
 import argparse
 from collections import defaultdict, Counter
 
-import mutagen
-from mutagen.flac import FLAC
-from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, TIT2, TPE1, TPE2, TALB, TRCK, TDRC, TCON
-from mutagen.mp4 import MP4
-from mutagen.oggvorbis import OggVorbis
-from mutagen.oggopus import OggOpus
-
 from share import (
     AUDIO_EXTENSIONS,
     IGNORED_DIRS,
     clean_string,
     parse_filename_metadata,
+    read_audio_metadata,
+    write_audio_metadata,
 )
 
 
 def read_track_metadata(file_path):
-    """Read tags from audio file across formats."""
+    """Read tags from audio file across formats using shared metadata reader."""
     ext = os.path.splitext(file_path)[1].lower()
+    sz = 0
+    try:
+        sz = os.path.getsize(file_path)
+    except OSError:
+        pass
+
     meta = {
         'path': file_path,
         'ext': ext,
@@ -42,49 +42,20 @@ def read_track_metadata(file_path):
         'albumartist': '',
         'title': '',
         'track_num': '',
-        'valid': False,
-        'size': 0
+        'valid': sz > 0,
+        'size': sz,
     }
 
+    if sz == 0:
+        return meta
+
     try:
-        size = os.path.getsize(file_path)
-        meta['size'] = size
-        if size == 0:
-            return meta
-
-        audio = mutagen.File(file_path)
-        if audio is None:
-            return meta
-
-        meta['valid'] = True
-
-        if ext == '.mp3':
-            tags = getattr(audio, 'tags', None)
-            if tags:
-                if 'TIT2' in tags: meta['title'] = clean_string(tags['TIT2'].text[0])
-                if 'TPE1' in tags: meta['artist'] = clean_string(tags['TPE1'].text[0])
-                if 'TALB' in tags: meta['album'] = clean_string(tags['TALB'].text[0])
-                if 'TPE2' in tags: meta['albumartist'] = clean_string(tags['TPE2'].text[0])
-                if 'TRCK' in tags: meta['track_num'] = clean_string(tags['TRCK'].text[0])
-
-        elif ext == '.m4a':
-            tags = getattr(audio, 'tags', None)
-            if tags:
-                if '\xa9nam' in tags: meta['title'] = clean_string(tags['\xa9nam'][0])
-                if '\xa9ART' in tags: meta['artist'] = clean_string(tags['\xa9ART'][0])
-                if '\xa9alb' in tags: meta['album'] = clean_string(tags['\xa9alb'][0])
-                if 'aART' in tags: meta['albumartist'] = clean_string(tags['aART'][0])
-                if 'trkn' in tags and tags['trkn']: meta['track_num'] = str(tags['trkn'][0][0])
-
-        elif ext in ('.flac', '.ogg', '.opus'):
-            tags = getattr(audio, 'tags', None) or audio
-            if tags:
-                meta['title'] = clean_string(tags.get('title', [''])[0])
-                meta['artist'] = clean_string(tags.get('artist', [''])[0])
-                meta['album'] = clean_string(tags.get('album', [''])[0])
-                meta['albumartist'] = clean_string(tags.get('albumartist', tags.get('album artist', tags.get('ALBUMARTIST', tags.get('ALBUM ARTIST', ['']))))[0])
-                meta['track_num'] = clean_string(tags.get('tracknumber', [''])[0])
-
+        raw = read_audio_metadata(file_path, fallback_to_filename=False)
+        meta['artist'] = raw.get('artist', '')
+        meta['album'] = raw.get('album', '')
+        meta['albumartist'] = raw.get('album_artist', '')
+        meta['title'] = raw.get('title', '')
+        meta['track_num'] = str(raw.get('track_num', '') or '')
     except Exception:
         pass
 
@@ -93,91 +64,17 @@ def read_track_metadata(file_path):
 
 def write_track_metadata(file_path, new_meta):
     """Write standardized tags back to file in Rockbox-compatible format."""
-    ext = os.path.splitext(file_path)[1].lower()
-    modified = False
-
     try:
-        if ext == '.mp3':
-            audio = MP3(file_path, ID3=ID3)
-            if audio.tags is None:
-                audio.add_tags()
-            tags = audio.tags
-
-            if new_meta.get('title') and str(tags.get('TIT2', '')) != new_meta['title']:
-                tags['TIT2'] = TIT2(encoding=3, text=[new_meta['title']])
-                modified = True
-            if new_meta.get('artist') and str(tags.get('TPE1', '')) != new_meta['artist']:
-                tags['TPE1'] = TPE1(encoding=3, text=[new_meta['artist']])
-                modified = True
-            if new_meta.get('album') and str(tags.get('TALB', '')) != new_meta['album']:
-                tags['TALB'] = TALB(encoding=3, text=[new_meta['album']])
-                modified = True
-            if new_meta.get('albumartist') and str(tags.get('TPE2', '')) != new_meta['albumartist']:
-                tags['TPE2'] = TPE2(encoding=3, text=[new_meta['albumartist']])
-                modified = True
-
-            if modified:
-                audio.save(v2_version=3)
-                return True
-
-        elif ext == '.m4a':
-            audio = MP4(file_path)
-            if audio.tags is None:
-                audio.add_tags()
-            tags = audio.tags
-
-            if new_meta.get('title') and tags.get('\xa9nam', [''])[0] != new_meta['title']:
-                tags['\xa9nam'] = [new_meta['title']]
-                modified = True
-            if new_meta.get('artist') and tags.get('\xa9ART', [''])[0] != new_meta['artist']:
-                tags['\xa9ART'] = [new_meta['artist']]
-                modified = True
-            if new_meta.get('album') and tags.get('\xa9alb', [''])[0] != new_meta['album']:
-                tags['\xa9alb'] = [new_meta['album']]
-                modified = True
-            if new_meta.get('albumartist') and tags.get('aART', [''])[0] != new_meta['albumartist']:
-                tags['aART'] = [new_meta['albumartist']]
-                modified = True
-
-            if modified:
-                audio.save()
-                return True
-
-        elif ext in ('.flac', '.ogg', '.opus'):
-            if ext == '.flac':
-                audio = FLAC(file_path)
-            elif ext == '.opus':
-                audio = OggOpus(file_path)
-            else:
-                audio = OggVorbis(file_path)
-
-            tags = audio.tags if audio.tags is not None else audio
-
-            if new_meta.get('title') and tags.get('title', [''])[0] != new_meta['title']:
-                tags['title'] = [new_meta['title']]
-                modified = True
-            if new_meta.get('artist') and tags.get('artist', [''])[0] != new_meta['artist']:
-                tags['artist'] = [new_meta['artist']]
-                modified = True
-            if new_meta.get('album') and tags.get('album', [''])[0] != new_meta['album']:
-                tags['album'] = [new_meta['album']]
-                modified = True
-            if new_meta.get('albumartist'):
-                current_aa = tags.get('albumartist', tags.get('ALBUMARTIST', ['']))[0]
-                if current_aa != new_meta['albumartist']:
-                    tags['albumartist'] = [new_meta['albumartist']]
-                    tags['ALBUMARTIST'] = [new_meta['albumartist']]
-                    modified = True
-
-            if modified:
-                audio.save()
-                return True
-
+        return write_audio_metadata(
+            file_path,
+            title=new_meta.get('title'),
+            artist=new_meta.get('artist'),
+            album=new_meta.get('album'),
+            album_artist=new_meta.get('albumartist'),
+        )
     except Exception as e:
         print(f"      ❌ Error writing metadata to {os.path.basename(file_path)}: {e}", file=sys.stderr)
         return False
-
-    return False
 
 
 def sanitize_rockbox_metadata(root_dir, dry_run=False):

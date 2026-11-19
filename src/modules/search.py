@@ -1,63 +1,16 @@
 #!/usr/bin/env python3
 # ==============================================================================
 # Module: src/modules/search.py
-# Purpose: Search track/album by name without URL via iTunes & MusicBrainz APIs
+# Purpose: Search track/album by name without URL via iTunes API
 # ==============================================================================
 
 import json
-import os
 import sys
-import urllib.parse
-import urllib.request
-
-
-def search_itunes(query: str, entity: str = "song") -> list[dict]:
-    """Search iTunes for songs or albums."""
-    url = "https://itunes.apple.com/search?" + urllib.parse.urlencode({
-        'term': query,
-        'entity': entity,
-        'limit': 5
-    })
-    req = urllib.request.Request(url, headers={'User-Agent': 'SyncDAP/1.0'})
-    try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            results = data.get('results', [])
-            candidates = []
-            for r in results:
-                cover = r.get('artworkUrl100', '')
-                if cover:
-                    # Upgrade to higher resolution artwork
-                    cover = cover.replace('100x100bb', '600x600bb')
-                candidates.append({
-                    'artist': r.get('artistName', ''),
-                    'name': r.get('trackName', r.get('collectionName', '')),
-                    'album_name': r.get('collectionName', ''),
-                    'track_number': r.get('trackNumber', 1),
-                    'tracks_count': r.get('trackCount', 1),
-                    'year': str(r.get('releaseDate', ''))[:4],
-                    'duration': (r.get('trackTimeMillis') or 0) / 1000.0,
-                    'cover_url': cover,
-                    'genres': [r.get('primaryGenreName', '')],
-                    'isrc': r.get('isrc', '')
-                })
-            return candidates
-    except Exception:
-        return []
+from share.api import itunes_song_metadata
 
 
 def resolve_query(query: str, is_album: bool = False) -> dict | None:
-    """Resolve a text query to canonical metadata."""
-    entity = "album" if is_album else "song"
-    candidates = search_itunes(query, entity=entity)
-    if not candidates and is_album:
-        # Fallback to song search if album search returned nothing
-        candidates = search_itunes(query, entity="song")
-
-    if not candidates:
-        return None
-
-    return candidates[0]
+    return itunes_song_metadata(query, is_album=is_album)
 
 
 def main():

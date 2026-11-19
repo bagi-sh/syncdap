@@ -9,7 +9,7 @@ import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from share import AUDIO_EXTENSIONS, fetch_lyrics, embed_lyrics_into_file, get_audio_metadata
+from share import AUDIO_EXTENSIONS, fetch_lyrics, embed_lyrics_into_file, read_audio_metadata
 
 lock = threading.Lock()
 downloaded_count = 0
@@ -17,27 +17,15 @@ embedded_count = 0
 not_found_count = 0
 
 
-def get_audio_info(audio_path):
-    meta = get_audio_metadata(audio_path)
-    artist, title, album, duration = meta['artist'], meta['title'], meta['album'], meta['duration']
-
-    if not title or not artist:
-        base = os.path.splitext(os.path.basename(audio_path))[0]
-        if ' - ' in base:
-            parts = base.split(' - ')
-            artist = parts[-1].strip()
-            title = ' - '.join(parts[:-1]).strip()
-            if ' ' in title and title.split(' ')[0].isdigit():
-                title = ' '.join(title.split(' ')[1:]).strip()
-
-    return artist, title, album, duration
-
-
 def process_item(idx, total, item, synced_only, do_embed):
     global downloaded_count, embedded_count, not_found_count
     audio_path, lrc_path = item
 
-    artist, title, album, duration = get_audio_info(audio_path)
+    meta = read_audio_metadata(audio_path)
+    artist = meta.get('artist', '')
+    title = meta.get('title', '')
+    album = meta.get('album', '')
+    duration = meta.get('duration') or 0.0
     lrc_content = None
 
     if os.path.isfile(lrc_path):

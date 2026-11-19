@@ -24,6 +24,7 @@ from share import (
     audio_quality_wins,
     track_number_from_filename,
     expand_playlist_entries,
+    parse_filename_metadata,
 )
 from modules import fallback, covers, genres, rockbox_tags
 
@@ -81,7 +82,6 @@ def find_bundled_albums(
 
         # Fallback parsing from filename if tags are empty
         if not title or not artist:
-            from share.text import parse_filename_metadata
             parsed = parse_filename_metadata(fpath)
             artist = artist or parsed.get('artist') or "Unknown Artist"
             album = album or parsed.get('album') or "Unknown Album"

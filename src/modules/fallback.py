@@ -17,15 +17,10 @@ import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-import mutagen
-from mutagen.flac import FLAC, Picture
-from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, TIT2, TPE1, TALB, TRCK, TDRC, TCON, APIC, COMM
-from mutagen.mp4 import MP4, MP4Cover
-
 from share import (
     fetch_lyrics,
     sanitize_filename,
+    write_audio_metadata,
     FULL_ALBUM_PATTERNS,
     LIVE_PATTERNS,
     REMIX_PATTERNS,
@@ -130,7 +125,6 @@ def sanitize(name):
 
 
 def tag_audio_file(file_path, artist, album, title, track_num, tracks_count, year, genre, cover_jpg):
-    ext = os.path.splitext(file_path)[1].lower()
     img_data = None
     mime_type = "image/jpeg"
     if cover_jpg and os.path.isfile(cover_jpg):
@@ -142,75 +136,18 @@ def tag_audio_file(file_path, artist, album, title, track_num, tracks_count, yea
         except Exception:
             pass
 
-    try:
-        if ext == '.mp3':
-            audio = MP3(file_path, ID3=ID3)
-            if audio.tags is None:
-                audio.add_tags()
-            audio.tags.delall('TIT2')
-            audio.tags.delall('TPE1')
-            audio.tags.delall('TALB')
-            audio.tags.delall('TRCK')
-            audio.tags.delall('TDRC')
-            audio.tags.delall('TCON')
-
-            audio.tags.add(TIT2(encoding=3, text=title))
-            audio.tags.add(TPE1(encoding=3, text=artist))
-            audio.tags.add(TALB(encoding=3, text=album))
-            trck_str = f"{track_num}/{tracks_count}" if tracks_count else str(track_num)
-            audio.tags.add(TRCK(encoding=3, text=trck_str))
-            if year:
-                audio.tags.add(TDRC(encoding=3, text=str(year)))
-            if genre:
-                audio.tags.add(TCON(encoding=3, text=str(genre)))
-            if img_data:
-                audio.tags.delall('APIC')
-                audio.tags.add(APIC(encoding=3, mime=mime_type, type=3, desc='', data=img_data))
-            audio.save(v2_version=3)
-
-        elif ext == '.flac':
-            audio = FLAC(file_path)
-            audio['title'] = [title]
-            audio['artist'] = [artist]
-            audio['album'] = [album]
-            audio['tracknumber'] = [str(track_num)]
-            if tracks_count:
-                audio['totaltracks'] = [str(tracks_count)]
-            if year:
-                audio['date'] = [str(year)]
-            if genre:
-                audio['genre'] = [str(genre)]
-            if img_data:
-                audio.clear_pictures()
-                pic = Picture()
-                pic.type = 3
-                pic.mime = mime_type
-                pic.desc = ''
-                pic.data = img_data
-                audio.add_picture(pic)
-            audio.save()
-
-        elif ext == '.m4a':
-            audio = MP4(file_path)
-            if audio.tags is None:
-                audio.add_tags()
-            audio.tags['\xa9nam'] = [title]
-            audio.tags['\xa9ART'] = [artist]
-            audio.tags['\xa9alb'] = [album]
-            t_num = int(track_num) if str(track_num).isdigit() else 1
-            t_tot = int(tracks_count) if str(tracks_count).isdigit() else 0
-            audio.tags['trkn'] = [(t_num, t_tot)]
-            if year:
-                audio.tags['\xa9day'] = [str(year)]
-            if genre:
-                audio.tags['\xa9gen'] = [str(genre)]
-            if img_data:
-                cov_format = MP4Cover.FORMAT_PNG if 'png' in mime_type else MP4Cover.FORMAT_JPEG
-                audio.tags['covr'] = [MP4Cover(img_data, imageformat=cov_format)]
-            audio.save()
-
-    except Exception:
-        pass
+    write_audio_metadata(
+        file_path,
+        title=title,
+        artist=artist,
+        album=album,
+        track_num=track_num,
+        total_tracks=tracks_count,
+        year=year,
+        genre=genre,
+        cover_data=img_data,
+        cover_mime=mime_type,
+    )
 
 
 def rescue_track(idx, total, d, temp_dir, target_m3u, target_ext, js_args, synced_only):

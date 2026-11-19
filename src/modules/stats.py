@@ -21,9 +21,14 @@ from mutagen.mp4 import MP4
 from mutagen.oggvorbis import OggVorbis
 from mutagen.oggopus import OggOpus
 
-from share import AUDIO_EXTENSIONS, IGNORED_DIRS, has_embedded_cover_fast
-
-COVER_NAMES = ('cover.jpg', 'cover.jpeg', 'cover.png', 'folder.jpg', 'folder.jpeg', 'folder.png')
+from share import (
+    AUDIO_EXTENSIONS,
+    IGNORED_DIRS,
+    COVER_FILENAMES,
+    format_bytes,
+    is_lrc_synced,
+    has_embedded_cover_fast,
+)
 
 # ANSI Colors
 BOLD = "\033[1m"
@@ -37,31 +42,10 @@ DIM = "\033[2m"
 RESET = "\033[0m"
 
 
-def format_bytes(num_bytes):
-    """Format bytes to human readable string (KB, MB, GB)."""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if num_bytes < 1024.0:
-            return f"{num_bytes:.2f} {unit}"
-        num_bytes /= 1024.0
-    return f"{num_bytes:.2f} PB"
-
-
 def make_bar(percent, width=20, fill_color=GREEN):
     filled = int(round(width * (percent / 100.0)))
     empty = width - filled
     return f"{fill_color}{'█' * filled}{DIM}{'░' * empty}{RESET} {percent:5.1f}%"
-
-
-def check_lrc_synced(lrc_path):
-    """Check if .lrc file contains synced timestamp lines ([mm:ss])."""
-    try:
-        with open(lrc_path, 'r', encoding='utf-8', errors='ignore') as f:
-            for line in f:
-                if re.match(r'^\s*\[\d{2}:\d{2}', line):
-                    return True
-    except Exception:
-        pass
-    return False
 
 
 def analyze_library(root_dir):
@@ -107,7 +91,7 @@ def analyze_library(root_dir):
         dirnames[:] = [d for d in dirnames if d.lower() not in IGNORED_DIRS and not d.startswith('.Trash')]
 
         # Check standalone cover image in this directory
-        has_standalone = any(os.path.isfile(os.path.join(dirpath, cn)) and os.path.getsize(os.path.join(dirpath, cn)) > 0 for cn in COVER_NAMES)
+        has_standalone = any(os.path.isfile(os.path.join(dirpath, cn)) and os.path.getsize(os.path.join(dirpath, cn)) > 0 for cn in COVER_FILENAMES)
 
         dir_audio = []
         for f in filenames:
@@ -145,7 +129,7 @@ def analyze_library(root_dir):
             lrc_path = os.path.splitext(full_path)[0] + '.lrc'
             if os.path.isfile(lrc_path) and os.path.getsize(lrc_path) > 0:
                 lrc_total += 1
-                if check_lrc_synced(lrc_path):
+                if is_lrc_synced(lrc_path):
                     lrc_synced += 1
                 else:
                     lrc_unsynced += 1

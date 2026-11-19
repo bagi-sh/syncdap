@@ -11,15 +11,7 @@ import os
 import subprocess
 import sys
 
-from share import find_audio_files, get_audio_metadata, get_track_duration
-
-
-def format_duration(seconds: float) -> str:
-    m, s = divmod(int(round(seconds)), 60)
-    h, m = divmod(m, 60)
-    if h > 0:
-        return f"{h:d}:{m:02d}:{s:02d}"
-    return f"{m:02d}:{s:02d}"
+from share import find_audio_files, get_audio_metadata, get_track_duration, format_duration
 
 
 def audit_long_tracks(

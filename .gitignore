@@ -100,3 +100,4 @@ Thumbs.db
 *.sublime-workspace
 .env
 .env.*
+.config/

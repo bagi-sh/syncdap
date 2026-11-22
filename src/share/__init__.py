@@ -1,7 +1,4 @@
-# ==============================================================================
-# Package: src/share
-# Purpose: Shared utilities, constants, normalization, and helper functions
-# ==============================================================================
+"""Shared utilities, constants, normalization, and helper functions."""
 
 from .constants import (
     AUDIO_EXTENSIONS,
@@ -74,6 +71,15 @@ from .api import (
     musicbrainz_genre,
     resolve_online_genre,
 )
+from .config import (
+    load_config,
+    get_config_value,
+)
+from .icons import (
+    ICONS,
+    get_icons,
+    format_error_dual,
+)
 
 __all__ = [
     # constants
@@ -140,4 +146,11 @@ __all__ = [
     "deezer_genre",
     "musicbrainz_genre",
     "resolve_online_genre",
+    # config
+    "load_config",
+    "get_config_value",
+    # icons
+    "ICONS",
+    "get_icons",
+    "format_error_dual",
 ]

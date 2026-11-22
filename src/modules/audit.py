@@ -1,9 +1,4 @@
-#!/usr/bin/env python3
-# ==============================================================================
-# Module: src/modules/audit.py
-# Purpose: Audit library files >10 min against iTunes/MusicBrainz to detect
-#          accidental full-album rips.
-# ==============================================================================
+"""Library duration anomaly and full-album rip auditor."""
 
 import argparse
 import json
@@ -11,7 +6,7 @@ import os
 import subprocess
 import sys
 
-from share import find_audio_files, get_audio_metadata, get_track_duration, format_duration
+from share import find_audio_files, get_audio_metadata, get_track_duration, format_duration, ICONS
 
 
 def audit_long_tracks(
@@ -20,12 +15,14 @@ def audit_long_tracks(
     json_output: bool = False,
     auto_split: bool = False,
 ) -> tuple[list[str], int, int, int]:
+    """Scan music_root for tracks longer than threshold and verify against APIs.
+
+    Files with ratio > 1.5x compared to expected track duration indicate
+    full-album single-file rips.
     """
-    Scan music_root for tracks longer than threshold_seconds and verify against APIs.
-    Returns (suspect_paths, verified_count, suspect_count, unknown_count).
-    Only files with ratio > 1.5x (100% sure full-album rip) are auto-split.
-    """
-    print(f"\n🔍 Scanning for tracks longer than {threshold_seconds/60:.0f} minutes in: {music_root}")
+    if not json_output:
+        print(f"\n{ICONS.find} Scanning for tracks longer than {threshold_seconds/60:.0f} minutes in: {music_root}")
+
     audio_files = find_audio_files(music_root)
     long_tracks = []
 
@@ -37,12 +34,14 @@ def audit_long_tracks(
 
     total = len(long_tracks)
     if total == 0:
-        print(f"   ✨ No tracks longer than {threshold_seconds/60:.0f} minutes found in library.")
+        if not json_output:
+            print(f"  {ICONS.ok} No tracks longer than {threshold_seconds/60:.0f} minutes found in library.")
         return [], 0, 0, 0
 
-    print(f"   Found {total} track(s) >= {threshold_seconds/60:.0f} min. Auditing against metadata APIs...\n")
-    print(f"{'STATUS':<20} | {'DURATION':<9} | {'EXPECTED':<9} | {'RATIO':<6} | {'TRACK':<40}")
-    print("-" * 95)
+    if not json_output:
+        print(f"  {ICONS.info} Found {total} track(s) >= {threshold_seconds/60:.0f} min. Auditing against metadata APIs...\n")
+        print(f"{'STATUS':<20} | {'DURATION':<9} | {'EXPECTED':<9} | {'RATIO':<6} | {'TRACK':<40}")
+        print("─" * 95)
 
     suspect_paths: list[str] = []
     suspect_count  = 0
@@ -54,7 +53,7 @@ def audit_long_tracks(
         title  = meta.get('title') or os.path.basename(fpath)
         track_label = f"{artist} - {title}"
         if len(track_label) > 38:
-            track_label = track_label[:35] + "..."
+            track_label = track_label[:35] + ICONS.ellipsis
 
         expected_dur, source = get_track_duration(artist, title)
 
@@ -64,39 +63,42 @@ def audit_long_tracks(
             exp_fmt   = format_duration(expected_dur)
 
             if ratio > 1.5:
-                status = "🚨 FULL-ALBUM RIP"
+                status = f"{ICONS.err} FULL-ALBUM RIP"
                 suspect_count += 1
                 suspect_paths.append(fpath)
             elif ratio < 0.7:
-                status = "⚠️  TRUNCATED"
+                status = f"{ICONS.warn} TRUNCATED"
                 suspect_count += 1
             else:
-                status = "✅ VERIFIED TRACK"
+                status = f"{ICONS.ok} VERIFIED TRACK"
                 verified_count += 1
 
-            print(f"{status:<20} | {local_fmt:<9} | {exp_fmt:<9} | {ratio:<6.1f}x | {track_label:<40}")
+            if not json_output:
+                print(f"{status:<20} | {local_fmt:<9} | {exp_fmt:<9} | {ratio:<6.1f}x | {track_label:<40}")
 
-            if ratio > 1.5:
-                print(f"   ↳ Suggestion: syncdap --expand-albums \"{fpath}\"")
+            if ratio > 1.5 and not json_output:
+                print(f"   {ICONS.arrow} Suggestion: syncdap album expand \"{fpath}\"")
                 if auto_split:
-                    print(f"   ⚡ Auto-expanding: {fpath}")
+                    print(f"   {ICONS.dl} Auto-expanding: {fpath}")
                     expander_script = os.path.join(os.path.dirname(__file__), "album_expander.py")
                     try:
                         subprocess.run([sys.executable, expander_script, "-y", fpath], check=True)
-                        print(f"   ✅ Auto-expansion complete.")
+                        print(f"   {ICONS.ok} Auto-expansion complete.")
                     except subprocess.CalledProcessError as e:
-                        print(f"   ⚠️  Auto-expansion failed: {e}")
+                        print(f"   {ICONS.warn} Auto-expansion failed: {e}", file=sys.stderr)
         else:
             unknown_count += 1
             local_fmt = format_duration(local_dur)
-            print(f"{'❓ UNVERIFIED':<20} | {local_fmt:<9} | {'--:--':<9} | {'N/A':<6} | {track_label:<40}")
+            if not json_output:
+                print(f"{ICONS.info + ' UNVERIFIED':<20} | {local_fmt:<9} | {'--:--':<9} | {'N/A':<6} | {track_label:<40}")
 
-    print("-" * 95)
-    print(
-        f"📊 Audit Summary: {verified_count} verified authentic, "
-        f"{suspect_count} suspected album rips/anomalies, "
-        f"{unknown_count} unverified out of {total}.\n"
-    )
+    if not json_output:
+        print("─" * 95)
+        print(
+            f"Audit Summary: {verified_count} verified, "
+            f"{suspect_count} suspected album rips, "
+            f"{unknown_count} unverified out of {total}.\n"
+        )
     return suspect_paths, verified_count, suspect_count, unknown_count
 
 
@@ -112,7 +114,7 @@ def main() -> None:
     parser.add_argument("--json", action="store_true", help="Output suspect file paths as JSON array.")
     parser.add_argument(
         "--auto-expand", "--auto-split", action="store_true", dest="auto_split",
-        help="Automatically expand 100%% sure full-album rips (ratio > 1.5x) via re-download."
+        help="Automatically expand confirmed full-album rips (ratio > 1.5x) via re-download."
     )
     args = parser.parse_args()
 

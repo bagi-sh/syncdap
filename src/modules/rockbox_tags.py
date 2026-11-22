@@ -1,19 +1,15 @@
 #!/usr/bin/env python3
-# ==============================================================================
-# Module: src/rockbox_tags.py
-# Purpose: Deep metadata audit and sanitization specifically tailored for Rockbox.
-#          - Fixes <untagged> tracks and albums.
-#          - Unifies ALBUM and ALBUMARTIST tags per folder to prevent album splitting.
-#          - Sets consistent Album Artist (TPE2 in ID3, aART in M4A, ALBUMARTIST in FLAC/Vorbis).
-#          - Cleans 0-byte ghost files and trims rogue trailing whitespace.
-#          - Enforces ID3v2.3 compatibility for Rockbox DAPs.
-# ==============================================================================
+"""Rockbox metadata audit and tag sanitization module.
 
-import os
-import sys
-import re
+Fixes <untagged> entries, normalizes split ALBUM and ALBUMARTIST tags per folder,
+removes 0-byte ghost files, and enforces Rockbox-compliant ID3v2.3 tags across audio formats.
+"""
+
 import argparse
-from collections import defaultdict, Counter
+import os
+import re
+import sys
+from collections import Counter, defaultdict
 
 from share import (
     AUDIO_EXTENSIONS,
@@ -23,6 +19,7 @@ from share import (
     read_audio_metadata,
     write_audio_metadata,
 )
+from share.icons import ICONS
 
 
 def read_track_metadata(file_path):
@@ -73,7 +70,7 @@ def write_track_metadata(file_path, new_meta):
             album_artist=new_meta.get('albumartist'),
         )
     except Exception as e:
-        print(f"      ❌ Error writing metadata to {os.path.basename(file_path)}: {e}", file=sys.stderr)
+        print(f"      {ICONS.err} Error writing metadata to {os.path.basename(file_path)}: {e}", file=sys.stderr)
         return False
 
 
@@ -86,7 +83,7 @@ def sanitize_rockbox_metadata(root_dir, dry_run=False):
     4. Fills missing TITLE and ARTIST fallback tags.
     """
     root_path = os.path.abspath(root_dir)
-    print(f"\n🏷️ Rockbox Metadata Optimizer scanning: {root_path}")
+    print(f"\n{ICONS.tag} Rockbox Metadata Optimizer scanning: {root_path}")
 
     # Step 1: Scan all audio files and group by album folder
     album_folders = defaultdict(list)
@@ -110,10 +107,10 @@ def sanitize_rockbox_metadata(root_dir, dry_run=False):
 
     # Clean zero-byte ghost files
     if zero_byte_files:
-        print(f"   ⚠️ Found {len(zero_byte_files)} empty 0-byte audio file(s) that cause '<untagged>' in Rockbox.")
+        print(f"   {ICONS.warn} Found {len(zero_byte_files)} empty 0-byte audio file(s) that cause '<untagged>' in Rockbox.")
         for zf in zero_byte_files:
             rel = os.path.relpath(zf, root_path)
-            print(f"      🗑️ {'[DRY-RUN] Would remove' if dry_run else 'Removed 0-byte file'}: {rel}")
+            print(f"      {ICONS.info} {'[DRY-RUN] Would remove' if dry_run else 'Removed 0-byte file'}: {rel}")
             if not dry_run:
                 try:
                     os.remove(zf)
@@ -211,17 +208,17 @@ def sanitize_rockbox_metadata(root_dir, dry_run=False):
             unified_albums_count += 1
             if not dry_run:
                 rel_dir = os.path.relpath(album_dir, root_path)
-                print(f"   ✅ Unified album [{canonical_album}] by [{canonical_albumartist}]: {rel_dir}")
+                print(f"   {ICONS.ok} Unified album [{canonical_album}] by [{canonical_albumartist}]: {rel_dir}")
 
     mode_str = "[DRY-RUN] Would optimize" if dry_run else "Successfully optimized"
-    print(f"\n✨ Rockbox Metadata summary: {mode_str} {modified_tracks_count} track(s) across {unified_albums_count} album(s).\n")
+    print(f"\n{ICONS.ok} Rockbox Metadata summary: {mode_str} {modified_tracks_count} track(s) across {unified_albums_count} album(s).\n")
     return modified_tracks_count
 
 
 def main():
     parser = argparse.ArgumentParser(description="Optimize audio tags specifically for Rockbox database compatibility.")
     parser.add_argument("-r", "--root-dir", default=".", help="Root music directory to scan (default: .)")
-    parser.add_argument("-d", "--dry-run", action="store_true", help="Simulate without modifying files")
+    parser.add_argument("-n", "-d", "--dry-run", action="store_true", help="Simulate without modifying files")
     args = parser.parse_args()
 
     sanitize_rockbox_metadata(args.root_dir, dry_run=args.dry_run)

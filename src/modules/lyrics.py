@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-# ==============================================================================
-# Module: src/lyrics.py
-# Purpose: Multithreaded missing lyrics scanner (.lrc) via LRCLIB and syncedlyrics
-# ==============================================================================
+"""Multithreaded lyrics retrieval and embedding module.
+
+Searches synchronized (.lrc) and plain lyrics via LRCLIB and syncedlyrics,
+saves external .lrc sidecars, and optionally embeds synchronized text into ID3/FLAC/MP4 tags.
+"""
 
 import os
 import sys
@@ -10,6 +11,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from share import AUDIO_EXTENSIONS, fetch_lyrics, embed_lyrics_into_file, read_audio_metadata
+from share.icons import ICONS
 
 lock = threading.Lock()
 downloaded_count = 0
@@ -48,7 +50,7 @@ def process_item(idx, total, item, synced_only, do_embed):
         else:
             with lock:
                 not_found_count += 1
-                print(f"   [{idx}/{total}] ⚠️ Not found: {artist} - {title}")
+                print(f"   [{idx}/{total}] {ICONS.warn} Not found: {artist} - {title}")
             return
 
     embed_info = ""
@@ -59,13 +61,13 @@ def process_item(idx, total, item, synced_only, do_embed):
             embed_info = " [embedded in tags]"
 
     with lock:
-        print(f"   [{idx}/{total}] ✅ {artist} - {title}{embed_info}")
+        print(f"   [{idx}/{total}] {ICONS.ok} {artist} - {title}{embed_info}")
 
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: lyrics.py <dirs_file> [threads] [synced_only] [--embed]")
-        sys.exit(1)
+        print("Usage: lyrics.py <dirs_file> [threads] [synced_only] [--embed]", file=sys.stderr)
+        sys.exit(2)
 
     dirs_file = sys.argv[1]
     threads = int(sys.argv[2]) if len(sys.argv) > 2 else 4
@@ -90,7 +92,7 @@ def main():
     total = len(candidate_tracks)
     if total == 0:
         action = "already have embedded lyrics" if do_embed else "already have .lrc lyrics"
-        print(f"   ✨ All inspected tracks {action}.")
+        print(f"   {ICONS.ok} All inspected tracks {action}.")
         sys.exit(0)
 
     mode_label = "Scanning and embedding lyrics into metadata" if do_embed else "Searching missing lyrics"
@@ -102,7 +104,7 @@ def main():
         for f in futures:
             f.result()
 
-    summary = f"\n   📊 Lyrics processing completed: {downloaded_count} downloaded, {embedded_count} embedded, {not_found_count} missing out of {total}."
+    summary = f"\n   {ICONS.ok} Lyrics processing completed: {downloaded_count} downloaded, {embedded_count} embedded, {not_found_count} missing out of {total}."
     print(summary)
 
 

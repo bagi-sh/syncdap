@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-# ==============================================================================
-# Module: src/modules/album_expander.py
-# Purpose: Orchestrated album unbundling / expansion.
-#          Replaces single-file full album rips with authentic, high-quality,
-#          individually tagged tracks via re-download + metadata enrichment.
-# ==============================================================================
+"""Album expansion module for unbundling full-album files into authentic individual tracks.
+
+Audits candidate multi-track audio files, queries release tracklists via MusicBrainz/Deezer,
+downloads discrete tracks concurrently, enriches Rockbox ID3 tags, and migrates playlists.
+"""
 
 import argparse
 import os
@@ -26,6 +25,7 @@ from share import (
     expand_playlist_entries,
     parse_filename_metadata,
 )
+from share.icons import ICONS
 from modules import fallback, covers, genres, rockbox_tags
 
 
@@ -71,7 +71,7 @@ def find_bundled_albums(
     else:
         files_to_check = find_audio_files(root_dir)
 
-    print(f"\n🔍 Auditing {len(files_to_check)} file(s) for bundled album anomalies...")
+    print(f"\n{ICONS.find} Auditing {len(files_to_check)} file(s) for bundled album anomalies...")
 
     for fpath in files_to_check:
         meta = get_audio_metadata(fpath)
@@ -115,7 +115,7 @@ def find_bundled_albums(
                         fmt=fmt,
                     )
                 )
-                print(f"   🚨 Found bundled album: {artist} - {album or title} "
+                print(f"   {ICONS.warn} Found bundled album: {artist} - {album or title} "
                       f"({dur/60:.1f} min vs expected {expected_sec/60:.1f} min, {ratio:.1f}x)")
         elif is_target and dur >= 480:
             fmt = forced_format or os.path.splitext(fpath)[1].lstrip('.').lower() or "mp3"
@@ -130,7 +130,7 @@ def find_bundled_albums(
                     fmt=fmt,
                 )
             )
-            print(f"   🎯 Targeted candidate: {artist} - {album or title} ({dur/60:.1f} min)")
+            print(f"   {ICONS.info} Targeted candidate: {artist} - {album or title} ({dur/60:.1f} min)")
 
     return candidates
 
@@ -210,7 +210,7 @@ def download_single_track(
         temp_candidate = out_path
         upgrade, reason = audio_quality_wins(temp_candidate, existing)
         if not upgrade:
-            print(f"   ⏩ Keeping existing higher/equal quality track: {os.path.basename(existing)} [{reason}]")
+            print(f"   {ICONS.info} Keeping existing higher/equal quality track: {os.path.basename(existing)} [{reason}]")
             # Ensure lyrics are present for the existing track
             base_existing, _ = os.path.splitext(existing)
             lrc_existing = f"{base_existing}.lrc"
@@ -242,9 +242,9 @@ def download_single_track(
                 old_lrc = os.path.splitext(existing)[0] + ".lrc"
                 if os.path.isfile(old_lrc):
                     os.remove(old_lrc)
-                print(f"   ⬆️  Upgraded quality: replaced {os.path.basename(existing)} with {os.path.basename(out_path)}")
+                print(f"   {ICONS.ok} Upgraded quality: replaced {os.path.basename(existing)} with {os.path.basename(out_path)}")
             except Exception as e:
-                print(f"   ⚠️ Could not remove superseded file {existing}: {e}")
+                print(f"   {ICONS.warn} Could not remove superseded file {existing}: {e}")
         return out_path
     return None
 
@@ -265,15 +265,15 @@ def process_candidate(
     6. Safely remove old bundled rip and orphan .lrc
     Returns (old_path, downloaded_paths) or None
     """
-    print(f"\n📦 Resolving official tracklist for: {candidate.artist} - {candidate.album}")
+    print(f"\n{ICONS.disc} Resolving official tracklist for: {candidate.artist} - {candidate.album}")
     tracks = fetch_official_tracklist(candidate.artist, candidate.album)
     if not tracks:
-        print(f"   ❌ Could not find official tracklist for '{candidate.artist} - {candidate.album}'. Skipping.")
+        print(f"   {ICONS.err} Could not find official tracklist for '{candidate.artist} - {candidate.album}'. Skipping.")
         return None
 
     target_dir = os.path.dirname(os.path.abspath(candidate.old_path))
     total_tracks = len(tracks)
-    print(f"   📋 Found {total_tracks} track(s) in official release:")
+    print(f"   {ICONS.info} Found {total_tracks} track(s) in official release:")
     for t in tracks:
         dur_str = f"{int(t.duration_sec)//60}:{int(t.duration_sec)%60:02d}" if t.duration_sec else "--:--"
         print(f"      {t.number:02d}. {t.title} ({dur_str})")
@@ -283,7 +283,7 @@ def process_candidate(
         print(f"   [DRY-RUN] Would remove bundled album file: {candidate.old_path}")
         return (candidate.old_path, [])
 
-    print(f"\n🚀 Downloading {total_tracks} track(s) using {threads} parallel worker(s)...")
+    print(f"\n{ICONS.dl} Downloading {total_tracks} track(s) using {threads} parallel worker(s)...")
     downloaded: list[str] = []
 
     with ThreadPoolExecutor(max_workers=threads) as pool:
@@ -295,57 +295,57 @@ def process_candidate(
             res = f.result()
             if res:
                 downloaded.append(res)
-                print(f"   ✅ Saved: {os.path.basename(res)}")
+                print(f"   {ICONS.ok} Saved: {os.path.basename(res)}")
             else:
                 t = futures[f]
-                print(f"   ⚠️ Failed to retrieve: {t.number:02d} - {t.title}")
+                print(f"   {ICONS.warn} Failed to retrieve: {t.number:02d} - {t.title}")
 
     # Safety threshold: at least 80% (or all if <= 2 tracks) must succeed
     required_count = max(1, int(total_tracks * 0.8)) if total_tracks > 2 else total_tracks
     if len(downloaded) < required_count:
-        print(f"   ❌ Safety check failed: Only {len(downloaded)}/{total_tracks} tracks succeeded (needed {required_count}).")
+        print(f"   {ICONS.err} Safety check failed: Only {len(downloaded)}/{total_tracks} tracks succeeded (needed {required_count}).")
         print(f"      Keeping original bundled file intact: {candidate.old_path}")
         return None
 
     downloaded.sort()
 
     # Post-processing enrichment pipeline (DRY: reusing existing modules!)
-    print("\n✨ Running metadata enrichment and optimization pipeline...")
+    print(f"\n{ICONS.info} Running metadata enrichment and optimization pipeline...")
 
     # 1. Rockbox tags normalization
     try:
         rockbox_tags.sanitize_rockbox_metadata(target_dir, dry_run=False)
     except Exception as e:
-        print(f"   ⚠️ Rockbox tag normalization warning: {e}")
+        print(f"   {ICONS.warn} Rockbox tag normalization warning: {e}")
 
     # 2. Covers optimization (extract cover.jpg, strip embeds for Rockbox)
     try:
         covers.process_optimize_album(1, 1, target_dir)
     except Exception as e:
-        print(f"   ⚠️ Covers optimization warning: {e}")
+        print(f"   {ICONS.warn} Covers optimization warning: {e}")
 
     # 3. Genres enrichment
     try:
         genres.process_album(1, 1, target_dir)
     except Exception as e:
-        print(f"   ⚠️ Genres enrichment warning: {e}")
+        print(f"   {ICONS.warn} Genres enrichment warning: {e}")
 
     # 4. Safe purge of old bundled album file and orphan .lrc
     old_p = os.path.abspath(candidate.old_path)
     base_no_ext, _ = os.path.splitext(old_p)
     old_lrc = f"{base_no_ext}.lrc"
 
-    print(f"\n🗑️  Safely removing old bundled file: {os.path.basename(old_p)}")
+    print(f"\n{ICONS.info} Safely removing old bundled file: {os.path.basename(old_p)}")
     try:
         if os.path.isfile(old_p):
             os.remove(old_p)
     except Exception as e:
-        print(f"   ⚠️ Could not remove {old_p}: {e}")
+        print(f"   {ICONS.warn} Could not remove {old_p}: {e}")
 
     if os.path.isfile(old_lrc):
         try:
             os.remove(old_lrc)
-            print(f"   🗑️  Removed bundled .lrc: {os.path.basename(old_lrc)}")
+            print(f"   {ICONS.info} Removed bundled .lrc: {os.path.basename(old_lrc)}")
         except Exception:
             pass
 
@@ -364,10 +364,10 @@ def expand_albums(
     """Main entry point for expanding bundled albums into individual tracks."""
     candidates = find_bundled_albums(root_dir, target_file, fmt)
     if not candidates:
-        print("\n✨ No bundled full-album anomalies detected.")
+        print(f"\n{ICONS.ok} No bundled full-album anomalies detected.")
         return 0
 
-    print(f"\n🎯 Found {len(candidates)} bundled album candidate(s) to expand.")
+    print(f"\n{ICONS.disc} Found {len(candidates)} bundled album candidate(s) to expand.")
     for i, c in enumerate(candidates, 1):
         print(f"   [{i}] {c.artist} - {c.album} ({c.actual_duration/60:.1f} min) -> {c.old_path}")
 
@@ -389,11 +389,11 @@ def expand_albums(
 
     # Patch playlists (1-to-N replacement)
     if migration_map and not dry_run:
-        print(f"\n🎵 Patching playlists for {len(migration_map)} expanded album(s)...")
+        print(f"\n{ICONS.pl} Patching playlists for {len(migration_map)} expanded album(s)...")
         updated_pls = expand_playlist_entries(root_dir, migration_map)
-        print(f"   ✅ Updated {updated_pls} playlist(s) to reference individual tracks.")
+        print(f"   {ICONS.ok} Updated {updated_pls} playlist(s) to reference individual tracks.")
 
-    print("\n🎉 Album expansion complete!")
+    print(f"\n{ICONS.ok} Album expansion complete!")
     return 0
 
 
@@ -404,7 +404,7 @@ def main():
     parser.add_argument("target_file", nargs="?", default=None, help="Specific bundled audio file to expand (optional).")
     parser.add_argument("-r", "--root-dir", default=".", help="Root music library path to scan (default: .).")
     parser.add_argument("-t", "--threads", type=int, default=4, help="Worker thread concurrency (default: 4).")
-    parser.add_argument("-d", "--dry-run", action="store_true", help="Simulate expansion without downloading or deleting files.")
+    parser.add_argument("-n", "-d", "--dry-run", action="store_true", help="Simulate expansion without downloading or deleting files.")
     parser.add_argument("-y", "--yes", action="store_true", help="Skip confirmation prompts.")
     parser.add_argument("-F", "--format", default=None, help="Audio format: flac, mp3, m4a, opus, ogg, wav.")
     parser.add_argument("--synced-only", action="store_true", help="Only download synchronized [.lrc] lyrics.")

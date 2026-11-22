@@ -1,33 +1,22 @@
-#!/usr/bin/env python3
-# ==============================================================================
-# Module: src/stats.py
-# Purpose: Comprehensive music library analytics & status dashboard for Rockbox / DAPs.
-#          Tracks, albums, artists, format breakdown, bitrate, lyrics (synced vs unsynced),
-#          cover art status (embedded vs standalone cover.jpg), disk space, and tag health.
-# ==============================================================================
+"""Comprehensive music library analytics and status dashboard for Rockbox / DAPs."""
 
-import os
-import sys
-import re
 import argparse
-from collections import defaultdict, Counter
-from pathlib import Path
+import json
+import os
+import re
+import sys
+from collections import Counter, defaultdict
 
 import mutagen
-from mutagen.flac import FLAC
-from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, APIC
-from mutagen.mp4 import MP4
-from mutagen.oggvorbis import OggVorbis
-from mutagen.oggopus import OggOpus
 
 from share import (
     AUDIO_EXTENSIONS,
-    IGNORED_DIRS,
     COVER_FILENAMES,
+    IGNORED_DIRS,
+    ICONS,
     format_bytes,
-    is_lrc_synced,
     has_embedded_cover_fast,
+    is_lrc_synced,
 )
 
 # ANSI Colors
@@ -48,13 +37,14 @@ def make_bar(percent, width=20, fill_color=GREEN):
     return f"{fill_color}{'█' * filled}{DIM}{'░' * empty}{RESET} {percent:5.1f}%"
 
 
-def analyze_library(root_dir):
+def analyze_library(root_dir, output_format="table"):
     root_path = os.path.abspath(root_dir)
     if not os.path.exists(root_path):
-        print(f"{RED}❌ Error: Path does not exist: {root_path}{RESET}", file=sys.stderr)
+        print(f"{ICONS.err} Path does not exist: {root_path}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"\n{BOLD}{CYAN}📊 Analyzing music library at: {root_path}...{RESET}\n")
+    if output_format == "table":
+        print(f"\n{BOLD}{CYAN}{ICONS.info} Analyzing music library at: {root_path}...{RESET}\n")
 
     total_audio_files = 0
     total_audio_bytes = 0
@@ -64,7 +54,6 @@ def analyze_library(root_dir):
     format_sizes = Counter()
 
     album_dirs = defaultdict(list)
-    tracks_meta = []
 
     unique_artists_tags = set()
     unique_albumartists_tags = set()
@@ -73,11 +62,9 @@ def analyze_library(root_dir):
     missing_artist_count = 0
     missing_album_count = 0
     missing_albumartist_count = 0
-    missing_title_count = 0
 
     tracks_with_embedded_cover = 0
     albums_with_standalone_cover = 0
-    albums_with_embedded_only = 0
     albums_with_no_cover = 0
 
     lrc_total = 0
@@ -90,7 +77,6 @@ def analyze_library(root_dir):
     for dirpath, dirnames, filenames in os.walk(root_path):
         dirnames[:] = [d for d in dirnames if d.lower() not in IGNORED_DIRS and not d.startswith('.Trash')]
 
-        # Check standalone cover image in this directory
         has_standalone = any(os.path.isfile(os.path.join(dirpath, cn)) and os.path.getsize(os.path.join(dirpath, cn)) > 0 for cn in COVER_FILENAMES)
 
         dir_audio = []
@@ -103,7 +89,6 @@ def analyze_library(root_dir):
         if dir_audio:
             album_dirs[dirpath] = (dir_audio, has_standalone)
 
-    # Process each album directory
     for dirpath, (dir_audio, has_standalone) in album_dirs.items():
         if has_standalone:
             albums_with_standalone_cover += 1
@@ -138,12 +123,10 @@ def analyze_library(root_dir):
             try:
                 audio = mutagen.File(full_path)
                 if audio is not None:
-                    # Cover embed check
                     if has_embedded_cover_fast(audio, ext):
                         tracks_with_embedded_cover += 1
                         album_has_embed = True
 
-                    # FLAC bit depth
                     if ext == '.flac' and hasattr(audio.info, 'bits_per_sample'):
                         if audio.info.bits_per_sample > 16:
                             flac_hires_count += 1
@@ -157,21 +140,18 @@ def analyze_library(root_dir):
                             if 'TPE1' in tags: artist = str(tags['TPE1'].text[0]).strip()
                             if 'TALB' in tags: album = str(tags['TALB'].text[0]).strip()
                             if 'TPE2' in tags: albumartist = str(tags['TPE2'].text[0]).strip()
-                            if 'TIT2' in tags: title = str(tags['TIT2'].text[0]).strip()
                     elif ext == '.m4a':
                         tags = getattr(audio, 'tags', None)
                         if tags:
                             if '\xa9ART' in tags: artist = str(tags['\xa9ART'][0]).strip()
                             if '\xa9alb' in tags: album = str(tags['\xa9alb'][0]).strip()
                             if 'aART' in tags: albumartist = str(tags['aART'][0]).strip()
-                            if '\xa9nam' in tags: title = str(tags['\xa9nam'][0]).strip()
                     elif ext in ('.flac', '.ogg', '.opus'):
                         tags = getattr(audio, 'tags', None) or audio
                         if tags:
                             artist = str(tags.get('artist', [''])[0]).strip()
                             album = str(tags.get('album', [''])[0]).strip()
-                            albumartist = str(tags.get('albumartist', tags.get('album artist', tags.get('ALBUMARTIST', tags.get('ALBUM ARTIST', ['']))))[0]).strip()
-                            title = str(tags.get('title', [''])[0]).strip()
+                            albumartist = str(tags.get('albumartist', tags.get('album artist', tags.get('ALBUMARTIST', [''])))[0]).strip()
 
                     if artist: unique_artists_tags.add(artist)
                     else: missing_artist_count += 1
@@ -182,22 +162,12 @@ def analyze_library(root_dir):
                     if albumartist: unique_albumartists_tags.add(albumartist)
                     else: missing_albumartist_count += 1
 
-                    if not title: missing_title_count += 1
-
-                else:
-                    missing_artist_count += 1
-                    missing_album_count += 1
-                    missing_albumartist_count += 1
             except Exception:
-                missing_artist_count += 1
+                pass
 
-        if not has_standalone:
-            if album_has_embed:
-                albums_with_embedded_only += 1
-            else:
-                albums_with_no_cover += 1
+        if not has_standalone and not album_has_embed:
+            albums_with_no_cover += 1
 
-    # Playlists count
     playlist_count = 0
     playlist_tracks = 0
     playlist_dirs = [
@@ -220,50 +190,84 @@ def analyze_library(root_dir):
                         except Exception:
                             pass
 
-    # Disk Space Check
-    statvfs = os.statvfs(root_path)
-    free_bytes = statvfs.f_bavail * statvfs.f_frsize
-    total_disk_bytes = statvfs.f_blocks * statvfs.f_frsize
-    used_disk_bytes = total_disk_bytes - free_bytes
-    used_pct = (used_disk_bytes / total_disk_bytes) * 100 if total_disk_bytes else 0
+    try:
+        statvfs = os.statvfs(root_path)
+        free_bytes = statvfs.f_bavail * statvfs.f_frsize
+        total_disk_bytes = statvfs.f_blocks * statvfs.f_frsize
+        used_disk_bytes = total_disk_bytes - free_bytes
+        used_pct = (used_disk_bytes / total_disk_bytes) * 100 if total_disk_bytes else 0
+    except Exception:
+        free_bytes = 0
+        total_disk_bytes = 0
+        used_disk_bytes = 0
+        used_pct = 0
 
-    # Lossless vs Lossy
     lossless_count = format_counts['.flac'] + format_counts['.wav']
     lossy_count = total_audio_files - lossless_count
     lossless_pct = (lossless_count / total_audio_files * 100) if total_audio_files else 0
 
-    # Lyrics percentages
     lyrics_pct = (lrc_total / total_audio_files * 100) if total_audio_files else 0
     synced_pct = (lrc_synced / lrc_total * 100) if lrc_total else 0
-
-    # Total albums count
     total_albums_folders = len(album_dirs)
 
-    # OUTPUT DASHBOARD
-    print("=" * 66)
-    print(f" {BOLD}{CYAN}🎶 MUSIC LIBRARY STATUS & ANALYTICS REPORT{RESET}")
-    print("=" * 66)
-    print(f" 📂 Root Path:        {BOLD}{root_path}{RESET}")
-    print(f" 💾 Disk Usage:       {format_bytes(used_disk_bytes)} used / {format_bytes(total_disk_bytes)} total ({format_bytes(free_bytes)} free)")
-    print(f"    Disk Fill:        {make_bar(used_pct, 24, BLUE)}")
-    print(f" 🎵 Audio Size:       {BOLD}{format_bytes(total_audio_bytes)}{RESET} across {total_audio_files:,} tracks")
-    print("-" * 66)
+    if output_format == "json":
+        data = {
+            "root_path": root_path,
+            "total_tracks": total_audio_files,
+            "total_bytes": total_audio_bytes,
+            "album_folders": total_albums_folders,
+            "unique_artists": len(unique_artists_tags),
+            "playlists": playlist_count,
+            "playlist_tracks": playlist_tracks,
+            "lossless_count": lossless_count,
+            "lossy_count": lossy_count,
+            "standalone_covers": albums_with_standalone_cover,
+            "embedded_art_tracks": tracks_with_embedded_cover,
+            "lyrics_total": lrc_total,
+            "lyrics_synced": lrc_synced,
+            "missing_albumartist": missing_albumartist_count,
+            "zero_byte_files": zero_byte_count,
+            "disk_used_bytes": used_disk_bytes,
+            "disk_total_bytes": total_disk_bytes,
+        }
+        print(json.dumps(data, indent=2))
+        return
 
-    # 1. Overview counts
-    print(f" {BOLD}📁 Structural Totals:{RESET}")
-    print(f"    • Total Tracks:         {BOLD}{total_audio_files:,}{RESET}")
-    print(f"    • Album Folders:        {BOLD}{total_albums_folders:,}{RESET} (Tagged Albums: {len(unique_albums_tags):,})")
-    print(f"    • Unique Artists:       {BOLD}{len(unique_artists_tags):,}{RESET} (Album Artists: {len(unique_albumartists_tags):,})")
-    print(f"    • Playlists:            {BOLD}{playlist_count}{RESET} ({playlist_tracks:,} track entries)")
+    if output_format == "plain":
+        print(f"total_tracks\t{total_audio_files}")
+        print(f"total_bytes\t{total_audio_bytes}")
+        print(f"album_folders\t{total_albums_folders}")
+        print(f"unique_artists\t{len(unique_artists_tags)}")
+        print(f"lossless_count\t{lossless_count}")
+        print(f"lossy_count\t{lossy_count}")
+        print(f"playlists\t{playlist_count}")
+        print(f"lyrics_total\t{lrc_total}")
+        print(f"lyrics_synced\t{lrc_synced}")
+        return
+
+    # OUTPUT DASHBOARD
+    print("─" * 66)
+    print(f" {BOLD}{CYAN}{ICONS.music} Music Library Status & Analytics Report{RESET}")
+    print("─" * 66)
+    print(f" {ICONS.info} Root Path:        {BOLD}{root_path}{RESET}")
+    print(f" {ICONS.info} Disk Usage:       {format_bytes(used_disk_bytes)} used / {format_bytes(total_disk_bytes)} total ({format_bytes(free_bytes)} free)")
+    print(f"    Disk Fill:        {make_bar(used_pct, 24, BLUE)}")
+    print(f" {ICONS.music} Audio Size:       {BOLD}{format_bytes(total_audio_bytes)}{RESET} across {total_audio_files:,} tracks")
+    print("─" * 66)
+
+    print(f" {BOLD}Structural Totals:{RESET}")
+    print(f"    {ICONS.info} Total Tracks:         {BOLD}{total_audio_files:,}{RESET}")
+    print(f"    {ICONS.disc} Album Folders:        {BOLD}{total_albums_folders:,}{RESET} (Tagged Albums: {len(unique_albums_tags):,})")
+    print(f"    {ICONS.info} Unique Artists:       {BOLD}{len(unique_artists_tags):,}{RESET} (Album Artists: {len(unique_albumartists_tags):,})")
+    print(f"    {ICONS.pl} Playlists:            {BOLD}{playlist_count}{RESET} ({playlist_tracks:,} track entries)")
     print("")
 
-    # 2. Audio Formats & Quality
-    print(f" {BOLD}🎧 Audio Formats & Quality:{RESET}")
-    print(f"    • Lossless (FLAC/WAV):  {BOLD}{lossless_count:,}{RESET} tracks ({lossless_pct:.1f}%)")
+    print(f" {BOLD}Audio Formats & Quality:{RESET}")
+    print(f"    {ICONS.info} Lossless (FLAC/WAV):  {BOLD}{lossless_count:,}{RESET} tracks ({lossless_pct:.1f}%)")
     if flac_hires_count > 0:
         print(f"      - Hi-Res FLAC (24-bit): {BOLD}{flac_hires_count:,}{RESET} tracks")
         print(f"      - Standard FLAC (16-bit): {flac_16bit_count:,} tracks")
-    print(f"    • Lossy (M4A/MP3/OGG):  {lossy_count:,} tracks ({100 - lossless_pct:.1f}%)")
+    print(f"    {ICONS.info} Lossy (M4A/MP3/OGG):  {lossy_count:,} tracks ({100 - lossless_pct:.1f}%)")
     print("")
     for ext, count in format_counts.most_common():
         pct = (count / total_audio_files) * 100
@@ -272,69 +276,64 @@ def analyze_library(root_dir):
         print(f"    [{ext_upper:4}] {count:5,} tracks ({pct:4.1f}%) | {sz_str:>9} | {make_bar(pct, 16, CYAN)}")
     print("")
 
-    # 3. Cover Art Health
-    print(f" {BOLD}🖼️ Cover Art Status (Rockbox Optimization):{RESET}")
+    print(f" {BOLD}Cover Art Status (Rockbox Optimization):{RESET}")
     opt_albums_pct = (albums_with_standalone_cover / total_albums_folders * 100) if total_albums_folders else 0
-    print(f"    • Standalone cover.jpg: {BOLD}{albums_with_standalone_cover:,} / {total_albums_folders:,}{RESET} albums {make_bar(opt_albums_pct, 16, GREEN)}")
+    print(f"    {ICONS.img} Standalone cover.jpg: {BOLD}{albums_with_standalone_cover:,} / {total_albums_folders:,}{RESET} albums {make_bar(opt_albums_pct, 16, GREEN)}")
     if tracks_with_embedded_cover == 0:
-        print(f"    • Embedded Art:         {GREEN}✅ 0 tracks with embeds{RESET} (100% Rockbox Optimized!)")
+        print(f"    {ICONS.ok} Embedded Art:         {GREEN}0 tracks with embeds{RESET} (Rockbox Optimized)")
     else:
-        print(f"    • Embedded Art:         {YELLOW}⚠️ {tracks_with_embedded_cover:,} track(s) still contain embedded artwork{RESET}")
-    if albums_with_no_cover > 0:
-        print(f"    • Missing Covers:       {RED}⚠️ {albums_with_no_cover} album(s) without any cover{RESET}")
+        print(f"    {ICONS.warn} Embedded Art:         {YELLOW}{tracks_with_embedded_cover:,} track(s) still contain embedded artwork{RESET}")
     print("")
 
-    # 4. Lyrics (.lrc)
-    print(f" {BOLD}📝 Lyrics Coverage (.lrc):{RESET}")
-    print(f"    • Total Lyrics:         {BOLD}{lrc_total:,} / {total_audio_files:,}{RESET} tracks {make_bar(lyrics_pct, 16, MAGENTA)}")
+    print(f" {BOLD}Lyrics Coverage (.lrc):{RESET}")
+    print(f"    {ICONS.tag} Total Lyrics:         {BOLD}{lrc_total:,} / {total_audio_files:,}{RESET} tracks {make_bar(lyrics_pct, 16, MAGENTA)}")
     print(f"      - Synced ([mm:ss]):   {BOLD}{lrc_synced:,}{RESET} ({synced_pct:.1f}% of lyrics)")
     print(f"      - Plain Text:         {lrc_unsynced:,} ({100 - synced_pct:.1f}% of lyrics)")
-    missing_lrc = total_audio_files - lrc_total
-    if missing_lrc > 0:
-        print(f"      - Missing Lyrics:     {missing_lrc:,} tracks")
     print("")
 
-    # 5. Metadata Integrity for Rockbox Database
-    print(f" {BOLD}🏷️ Rockbox Tag Integrity:{RESET}")
+    print(f" {BOLD}Rockbox Tag Integrity:{RESET}")
     tag_errors = 0
     if missing_albumartist_count == 0:
-        print(f"    • Album Artist:         {GREEN}✅ 100% present (Prevents Split Albums!){RESET}")
+        print(f"    {ICONS.ok} Album Artist:         {GREEN}100% present (Prevents Split Albums){RESET}")
     else:
-        print(f"    • Album Artist:         {YELLOW}⚠️ {missing_albumartist_count:,} track(s) missing ALBUMARTIST{RESET} (May cause split albums)")
+        print(f"    {ICONS.warn} Album Artist:         {YELLOW}{missing_albumartist_count:,} track(s) missing ALBUMARTIST{RESET}")
         tag_errors += 1
 
     if missing_album_count == 0:
-        print(f"    • Album Tag:            {GREEN}✅ 100% present{RESET}")
+        print(f"    {ICONS.ok} Album Tag:            {GREEN}100% present{RESET}")
     else:
-        print(f"    • Album Tag:            {RED}⚠️ {missing_album_count:,} track(s) missing ALBUM{RESET} (Becomes <untagged>)")
+        print(f"    {ICONS.warn} Album Tag:            {RED}{missing_album_count:,} track(s) missing ALBUM{RESET}")
         tag_errors += 1
 
     if missing_artist_count == 0:
-        print(f"    • Artist Tag:           {GREEN}✅ 100% present{RESET}")
+        print(f"    {ICONS.ok} Artist Tag:           {GREEN}100% present{RESET}")
     else:
-        print(f"    • Artist Tag:           {RED}⚠️ {missing_artist_count:,} track(s) missing ARTIST{RESET}")
+        print(f"    {ICONS.warn} Artist Tag:           {RED}{missing_artist_count:,} track(s) missing ARTIST{RESET}")
         tag_errors += 1
 
     if zero_byte_count == 0:
-        print(f"    • 0-byte Ghost Files:   {GREEN}✅ 0 files (Clean){RESET}")
+        print(f"    {ICONS.ok} 0-byte Ghost Files:   {GREEN}0 files (Clean){RESET}")
     else:
-        print(f"    • 0-byte Ghost Files:   {RED}⚠️ {zero_byte_count} empty file(s) found{RESET} (Triggers <untagged> in Rockbox)")
+        print(f"    {ICONS.warn} 0-byte Ghost Files:   {RED}{zero_byte_count} empty file(s) found{RESET}")
         tag_errors += 1
 
-    print("=" * 66)
+    print("─" * 66)
     if tag_errors == 0 and tracks_with_embedded_cover == 0:
-        print(f" {GREEN}{BOLD}🎉 Your library is in pristine condition for Rockbox & DAP playback!{RESET}")
+        print(f" {GREEN}{BOLD}{ICONS.ok} Library is optimized for Rockbox & DAP playback.{RESET}")
     else:
-        print(f" {YELLOW}💡 Tip: Run './syncdap --optimize -r \"{root_path}\"' to optimize and fix all issues.{RESET}")
-    print("=" * 66 + "\n")
+        print(f" {YELLOW}Tip: Run 'syncdap optimize -r \"{root_path}\"' to fix reported issues.{RESET}")
+    print("─" * 66 + "\n")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Analyze audio library statistics and health for Rockbox/DAP.")
     parser.add_argument("-r", "--root-dir", default=".", help="Root music directory (default: .)")
+    parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+    parser.add_argument("--plain", action="store_true", help="Output tab-separated plain text")
     args = parser.parse_args()
 
-    analyze_library(args.root_dir)
+    fmt = "json" if args.json else ("plain" if args.plain else "table")
+    analyze_library(args.root_dir, output_format=fmt)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-# ==============================================================================
-# Module: src/modules/genres.py
-# Purpose: Album-level multi-API genre enrichment (iTunes -> Deezer -> MusicBrainz)
-# ==============================================================================
+"""Album-level genre enrichment module.
+
+Queries online APIs (iTunes, Deezer, MusicBrainz) to resolve canonical genres
+for albums and writes standardized genre tags across audio formats.
+"""
 
 import os
 import sys
@@ -15,6 +16,7 @@ from share import (
     set_audio_genre,
     resolve_online_genre,
 )
+from share.icons import ICONS
 
 print_lock = threading.Lock()
 updated_albums = 0
@@ -73,7 +75,7 @@ def process_album(idx, total, album_dir):
     if not resolved_genre:
         with print_lock:
             not_found_albums += 1
-            print(f"   [{idx}/{total}] ⚠️ Genre not found for album: {folder_artist} / {folder_album}")
+            print(f"   [{idx}/{total}] {ICONS.warn} Genre not found for album: {folder_artist} / {folder_album}")
         return
 
     applied_count = 0
@@ -85,15 +87,15 @@ def process_album(idx, total, album_dir):
         updated_albums += 1
         total_tracks_updated += applied_count
         print(
-            f"   [{idx}/{total}] 🏷️ {resolved_genre} [{source}] -> "
+            f"   [{idx}/{total}] {ICONS.tag} {resolved_genre} [{source}] -> "
             f"{folder_artist} / {folder_album} ({applied_count}/{len(audio_files)} tracks updated)"
         )
 
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: genres.py <dirs_file> [threads]")
-        sys.exit(1)
+        print("Usage: genres.py <dirs_file> [threads]", file=sys.stderr)
+        sys.exit(2)
 
     dirs_file = sys.argv[1]
     threads = int(sys.argv[2]) if len(sys.argv) > 2 else 4
@@ -105,7 +107,7 @@ def main():
 
     total = len(album_dirs)
     if total == 0:
-        print("   ℹ️ No album folders found to inspect for genre.")
+        print(f"   {ICONS.info} No album folders found to inspect for genre.")
         sys.exit(0)
 
     max_workers = min(threads, 4)
@@ -117,7 +119,7 @@ def main():
             f.result()
 
     print(
-        f"\n   📊 Genre metadata completed: {updated_albums} album(s) updated ({total_tracks_updated} tracks), "
+        f"\n   {ICONS.ok} Genre metadata completed: {updated_albums} album(s) updated ({total_tracks_updated} tracks), "
         f"{already_set_albums} album(s) already complete, {not_found_albums} not found out of {total}."
     )
 

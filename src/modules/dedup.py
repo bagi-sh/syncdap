@@ -1,29 +1,26 @@
 #!/usr/bin/env python3
-# ==============================================================================
-# Module: src/dedup.py
-# Purpose: Library-wide audio deduplication (FLAC > WAV > M4A > OPUS > OGG > MP3),
-#          bitrate/lossless aware scoring, .lrc transfer, and automatic M3U/M3U8
-#          playlist relinking and entry deduplication.
-# ==============================================================================
+"""Audio track deduplication and playlist relinking module.
 
-import os
-import sys
-import re
-import shutil
+Scans library for duplicated tracks (evaluating lossless/bitrate quality scoring),
+transfers synchronized lyrics (.lrc) to the winning track, removes lower quality duplicates,
+and relinks all playlists referencing purged tracks.
+"""
+
 import argparse
+import os
+import shutil
+import sys
 from collections import defaultdict
-from pathlib import Path
 
 from share import (
-    AUDIO_EXTENSIONS,
-    IGNORED_DIRS,
-    normalize_str,
     find_audio_files,
-    parse_filename_metadata as extract_track_info,
     get_all_playlist_files as find_playlist_files,
     get_audio_quality_score,
+    normalize_str,
+    parse_filename_metadata as extract_track_info,
     update_all_playlists,
 )
+from share.icons import ICONS
 
 
 def group_duplicates(audio_files):
@@ -82,17 +79,17 @@ def run_deduplication(root_dir, dry_run=False):
     - Updates all relevant playlists.
     """
     root_path = os.path.abspath(root_dir)
-    print(f"\n🔍 Scanning for duplicates in: {root_path}")
+    print(f"\n{ICONS.find} Scanning for duplicates in: {root_path}")
 
     audio_files = find_audio_files(root_path)
     print(f"   Total audio files found: {len(audio_files)}")
 
     duplicate_groups = group_duplicates(audio_files)
     if not duplicate_groups:
-        print("   ✅ No audio duplicates found in library!")
+        print(f"   {ICONS.ok} No audio duplicates found in library!")
         return 0, 0
 
-    print(f"   ⚠️ Found {len(duplicate_groups)} duplicate group(s) to resolve.\n")
+    print(f"   {ICONS.warn} Found {len(duplicate_groups)} duplicate group(s) to resolve.\n")
 
     replacements = {}
     total_deleted = 0
@@ -122,11 +119,11 @@ def run_deduplication(root_dir, dry_run=False):
         losers = scored[1:]
 
         winner_rel = os.path.relpath(winner['path'], root_path)
-        print(f"   🎵 Keep [{winner['desc']}]: {winner_rel}")
+        print(f"   {ICONS.music} Keep [{winner['desc']}]: {winner_rel}")
 
         for loser in losers:
             loser_rel = os.path.relpath(loser['path'], root_path)
-            print(f"      🗑️ Delete [{loser['desc']}]: {loser_rel}")
+            print(f"      {ICONS.info} Delete [{loser['desc']}]: {loser_rel}")
 
             total_deleted += 1
             total_bytes_freed += loser['size']
@@ -140,9 +137,9 @@ def run_deduplication(root_dir, dry_run=False):
                 if os.path.isfile(loser_lrc) and not os.path.isfile(winner_lrc):
                     try:
                         shutil.move(loser_lrc, winner_lrc)
-                        print(f"         📝 Transferred lyrics to winner: {os.path.basename(winner_lrc)}")
+                        print(f"         {ICONS.info} Transferred lyrics to winner: {os.path.basename(winner_lrc)}")
                     except Exception as e:
-                        print(f"         ⚠️ Failed transferring .lrc: {e}")
+                        print(f"         {ICONS.warn} Failed transferring .lrc: {e}")
                 elif os.path.isfile(loser_lrc):
                     try:
                         os.remove(loser_lrc)
@@ -153,7 +150,7 @@ def run_deduplication(root_dir, dry_run=False):
                 try:
                     os.remove(loser['path'])
                 except OSError as e:
-                    print(f"         ❌ Error removing {loser['path']}: {e}", file=sys.stderr)
+                    print(f"         {ICONS.err} Error removing {loser['path']}: {e}", file=sys.stderr)
 
     # Playlist updates
     search_dirs = [root_path]
@@ -161,27 +158,29 @@ def run_deduplication(root_dir, dry_run=False):
         search_dirs.append(os.path.join(root_path, 'Playlists'))
     if os.path.isdir(os.path.join(os.path.dirname(root_path), 'Playlists')):
         search_dirs.append(os.path.join(os.path.dirname(root_path), 'Playlists'))
-    # Also check /home/bagi/Music, /home/bagi/Playlists
     home_pl = os.path.expanduser('~/Playlists')
     if os.path.isdir(home_pl):
         search_dirs.append(home_pl)
 
     playlists = find_playlist_files(search_dirs)
-    print(f"\n📋 Updating playlists ({len(playlists)} found)...")
+    print(f"\n{ICONS.pl} Updating playlists ({len(playlists)} found)...")
     updated_pl = update_all_playlists(replacements, playlist_files=playlists, music_roots=search_dirs)
 
     # Perform full playlist path recovery and dead link prune
     try:
-        from playlist_repair import repair_playlists
+        from modules.playlist_repair import repair_playlists
     except ImportError:
-        sys.path.insert(0, os.path.dirname(__file__))
-        from playlist_repair import repair_playlists
+        try:
+            from playlist_repair import repair_playlists
+        except ImportError:
+            sys.path.insert(0, os.path.dirname(__file__))
+            from playlist_repair import repair_playlists
 
     repair_playlists(root_path, dry_run=dry_run)
 
     mb_freed = total_bytes_freed / (1024 * 1024)
     mode_str = "[DRY-RUN] Would delete" if dry_run else "Successfully removed"
-    print(f"\n✨ Deduplication summary: {mode_str} {total_deleted} duplicate track(s). Freed ~{mb_freed:.2f} MB. Updated {updated_pl} playlist(s).\n")
+    print(f"\n{ICONS.ok} Deduplication summary: {mode_str} {total_deleted} duplicate track(s). Freed ~{mb_freed:.2f} MB. Updated {updated_pl} playlist(s).\n")
 
     return total_deleted, updated_pl
 
@@ -189,7 +188,7 @@ def run_deduplication(root_dir, dry_run=False):
 def main():
     parser = argparse.ArgumentParser(description="Deduplicate audio tracks keeping highest quality and update playlists.")
     parser.add_argument("-r", "--root-dir", default=".", help="Root music directory to scan (default: .)")
-    parser.add_argument("-d", "--dry-run", action="store_true", help="Simulate without modifying files")
+    parser.add_argument("-n", "-d", "--dry-run", action="store_true", help="Simulate without modifying files")
     args = parser.parse_args()
 
     run_deduplication(args.root_dir, dry_run=args.dry_run)

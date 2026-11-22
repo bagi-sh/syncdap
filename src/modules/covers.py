@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-# ==============================================================================
-# Module: src/modules/covers.py
-# Purpose: Universal cover art embedding and Rockbox optimization (MP3, FLAC, M4A, OGG)
-# ==============================================================================
+"""Cover art management module.
+
+Handles universal artwork embedding into audio containers and Rockbox optimization
+(extracting external cover.jpg and stripping embedded images to save RAM and disk space).
+"""
 
 import os
 import sys
@@ -17,6 +18,7 @@ from share.covers import (
     has_embedded_cover,
     strip_covers_from_file,
 )
+from share.icons import ICONS
 
 lock = threading.Lock()
 processed_albums = 0
@@ -47,7 +49,7 @@ def process_embed_album(idx, total, album_dir):
 
     if not cover_file:
         with lock:
-            print(f"   [{idx}/{total}] ⚠️ No cover found for: {album_dir}")
+            print(f"   [{idx}/{total}] {ICONS.warn} No cover found for: {album_dir}")
         return
 
     mime_type = "image/png" if cover_file.lower().endswith('.png') else "image/jpeg"
@@ -68,7 +70,7 @@ def process_embed_album(idx, total, album_dir):
     with lock:
         processed_albums += 1
         updated_tracks += album_updated
-        print(f"   [{idx}/{total}] 🖼️ {album_dir} ({album_updated}/{len(audio_files)} tracks embedded)")
+        print(f"   [{idx}/{total}] {ICONS.img} {album_dir} ({album_updated}/{len(audio_files)} tracks embedded)")
 
 
 def process_optimize_album(idx, total, album_dir):
@@ -111,13 +113,13 @@ def process_optimize_album(idx, total, album_dir):
     with lock:
         processed_albums += 1
         updated_tracks += album_stripped
-        print(f"   [{idx}/{total}] 🪓 {album_dir} ({album_stripped}/{len(audio_files)} tracks stripped)")
+        print(f"   [{idx}/{total}] {ICONS.ok} {album_dir} ({album_stripped}/{len(audio_files)} tracks stripped)")
 
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: covers.py <mode:embed|optimize> <dirs_file> [threads]")
-        sys.exit(1)
+        print("Usage: covers.py <mode:embed|optimize> <dirs_file> [threads]", file=sys.stderr)
+        sys.exit(2)
 
     mode = sys.argv[1].lower()
     dirs_file = sys.argv[2]
@@ -130,7 +132,7 @@ def main():
 
     total = len(album_dirs)
     if total == 0:
-        print("   ℹ️ No album folders found to process.")
+        print(f"   {ICONS.info} No album folders found to process.")
         sys.exit(0)
 
     action_label = "Embedding cover arts" if mode == "embed" else "Stripping embedded covers (Rockbox mode)"
@@ -145,12 +147,12 @@ def main():
 
     if mode == "optimize":
         print(
-            f"\n   📊 Cover art operation completed: {processed_albums} album(s) stripped "
+            f"\n   {ICONS.ok} Cover art operation completed: {processed_albums} album(s) stripped "
             f"({updated_tracks} tracks), {already_optimized_albums} album(s) were already optimized."
         )
     else:
         print(
-            f"\n   📊 Cover art operation completed: {processed_albums} albums processed, "
+            f"\n   {ICONS.ok} Cover art operation completed: {processed_albums} albums processed, "
             f"{updated_tracks} tracks embedded."
         )
 

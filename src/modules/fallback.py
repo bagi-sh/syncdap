@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-# ==============================================================================
-# Module: src/fallback.py
-# Purpose: Parallel fallback rescue via yt-dlp + universal metadata & cover embedding
-# ==============================================================================
+"""Fallback track rescue module via yt-dlp.
+
+Recovers missing or failed downloads using candidate filtering, duration matching,
+parallel yt-dlp extraction, Rockbox-compliant ID3 metadata tagging, and lyrics fetching.
+"""
 
 import sys
 import os
@@ -25,6 +26,7 @@ from share import (
     LIVE_PATTERNS,
     REMIX_PATTERNS,
 )
+from share.icons import ICONS
 
 lock = threading.Lock()
 
@@ -184,7 +186,7 @@ def rescue_track(idx, total, d, temp_dir, target_m3u, target_ext, js_args, synce
 
     if os.path.exists(final_audio):
         with lock:
-            print(f"   [{idx}/{total}] ⏩ Already exists: {final_audio}")
+            print(f"   [{idx}/{total}] {ICONS.info} Already exists: {final_audio}")
         if not os.path.exists(final_lrc):
             fetch_lyrics(artist, title, album, duration, final_lrc, synced_only)
         if target_m3u and os.path.exists(target_m3u):
@@ -199,7 +201,7 @@ def rescue_track(idx, total, d, temp_dir, target_m3u, target_ext, js_args, synce
         return True
 
     with lock:
-        print(f"   [{idx}/{total}] 🔍 Rescuing: {artist} - {title}")
+        print(f"   [{idx}/{total}] {ICONS.find} Rescuing: {artist} - {title}")
 
     temp_base = os.path.join(temp_dir, f"rescue_{uuid.uuid4().hex}")
     temp_dest = f"{temp_base}.{target_ext}"
@@ -241,11 +243,11 @@ def rescue_track(idx, total, d, temp_dir, target_m3u, target_ext, js_args, synce
                         pf.write(rel_entry)
 
         with lock:
-            print(f"   [{idx}/{total}] ✅ Saved: {final_audio} ({lrc_status})")
+            print(f"   [{idx}/{total}] {ICONS.ok} Saved: {final_audio} ({lrc_status})")
         return True
     else:
         with lock:
-            print(f"   [{idx}/{total}] ❌ Could not retrieve audio for: {artist} - {title}")
+            print(f"   [{idx}/{total}] {ICONS.err} Could not retrieve audio for: {artist} - {title}")
         return False
 
 
@@ -338,8 +340,8 @@ def rescue_single_track(
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: fallback.py <batch_meta_file> <temp_dir> [target_m3u] [threads] [synced_only] [format] [js_args]")
-        sys.exit(1)
+        print("Usage: fallback.py <batch_meta_file> <temp_dir> [target_m3u] [threads] [synced_only] [format] [js_args]", file=sys.stderr)
+        sys.exit(2)
 
     batch_meta_file = sys.argv[1]
     temp_dir = sys.argv[2]
@@ -355,8 +357,8 @@ def main():
         with open(batch_meta_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
     except Exception as e:
-        print(f"   ❌ Failed to parse metadata file: {e}")
-        sys.exit(0)
+        print(f"   {ICONS.err} Failed to parse metadata file: {e}", file=sys.stderr)
+        sys.exit(1)
 
     tracks = []
     seen_urls = set()

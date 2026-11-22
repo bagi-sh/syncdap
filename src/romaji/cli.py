@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/romaji/cli.py
-# Purpose: CLI argument parser for Romaji transliteration
-# ==============================================================================
+"""CLI argument parser for Japanese Romaji transliteration."""
 
 import argparse
 import sys
@@ -18,11 +15,12 @@ def main():
     parser = argparse.ArgumentParser(
         description="Transliterate Japanese music metadata (Kanji/Kana) to Romaji for Rockbox & FAT32 players."
     )
-    parser.add_argument("-r", "--root-dir", type=str, default=".", help="Root directory of music library or player (e.g. /run/media/bagi/F695-0800)")
+    parser.add_argument("-r", "--root-dir", type=str, default=".", help="Root directory of music library or player (default: .)")
     parser.add_argument("-p", "-P", "--playlist", type=str, help="Specific playlist file or name to process")
     parser.add_argument("-a", "--all", action="store_true", help="Process entire music library and playlists")
-    parser.add_argument("-d", "--dry-run", action="store_true", help="Simulate actions without modifying files")
+    parser.add_argument("-n", "-d", "--dry-run", dest="dry_run", action="store_true", help="Simulate actions without modifying files")
     parser.add_argument("-t", "--threads", type=int, default=4, help="Number of worker threads (default: 4)")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Show detailed execution diagnostics")
 
     args = parser.parse_args()
 

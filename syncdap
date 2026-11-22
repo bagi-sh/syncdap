@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Script: syncdap
-# Purpose: Modular Spotify audio downloader, quality switcher/upgrader,
-#          metadata/genre enricher, cover embedding, lyrics fetcher,
-#          playlist manager, and Rockbox/DAP Romaji transliterator.
+# Purpose: Modular Rockbox and DAP music library synchronization coordinator
 # ==============================================================================
 
 set -uo pipefail
@@ -11,241 +9,39 @@ set -uo pipefail
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 
 # Source modular libraries
+source "$SCRIPT_DIR/src/sh/icons.sh"
+source "$SCRIPT_DIR/src/sh/config.sh"
 source "$SCRIPT_DIR/src/sh/common.sh"
 source "$SCRIPT_DIR/src/sh/downloader.sh"
 source "$SCRIPT_DIR/src/sh/playlists.sh"
 source "$SCRIPT_DIR/src/sh/cli.sh"
 source "$SCRIPT_DIR/src/sh/orchestrator.sh"
 
-# --- MAIN ORCHESTRATION ---
 main() {
     parse_arguments "$@"
 
-    # Mode: Update syncdap
-    if [ "$UPDATE_MODE" = true ]; then
-        perform_update
-    fi
-
-    # Mode: Uninstall syncdap
-    if [ "$UNINSTALL_MODE" = true ]; then
-        perform_uninstall
-    fi
-
-    check_dependencies
-    setup_environment
-
-    # Mode 0a: Interactive Playlist Manager Menu
-    if [ "$PLAYLIST_MANAGER_MODE" = true ]; then
-        run_py "$SCRIPT_DIR/src/playlists/cli.py" --menu
-        exit $?
-    fi
-
-    # Mode: Album Expander / Unbundling Mode
-    if [ "$EXPAND_ALBUMS_MODE" = true ] || [ "$SPLIT_MODE" = true ]; then
-        orchestrate_expand_albums
-        exit $?
-    fi
-
-    # Mode: Duration Anomaly Auditor Mode
-    if [ "$AUDIT_DURATION_MODE" = true ]; then
-        orchestrate_audit_duration
-        exit $?
-    fi
-
-    # Mode: Metadata Lyrics Embedding Mode
-    if [ "$EMBED_LYRICS_MODE" = true ]; then
-        orchestrate_embed_lyrics
-        exit $?
-    fi
-
-    # Mode: Search by name without URL
-    if [ -n "$SEARCH_QUERY" ] && [ -z "$CLEAN_URL" ]; then
-        orchestrate_search_download
-        exit $?
-    fi
-
-    # Mode 0b: Merge Playlists Mode
-    if [ "$MERGE_PLAYLIST_MODE" = true ]; then
-        local yes_flag=""
-        [ "$ASSUME_YES" = true ] && yes_flag="--yes"
-        run_py "$SCRIPT_DIR/src/playlists/cli.py" --merge "$MERGE_PL1" "$MERGE_PL2" ${MERGE_OUT:+"$MERGE_OUT"} $yes_flag
-        exit $?
-    fi
-
-    # Mode 0c: Delete Playlist Mode
-    if [ "$DELETE_PLAYLIST_MODE" = true ]; then
-        local yes_flag=""
-        [ "$ASSUME_YES" = true ] && yes_flag="--yes"
-        local del_target="${DELETE_PLAYLIST_TARGET:-$PLAYLIST_NAME}"
-        if [ -z "$del_target" ]; then
-            echo -e "${RED}❌ Error: --delete requires a playlist name or file.${RESET}"
-            exit 1
-        fi
-        run_py "$SCRIPT_DIR/src/playlists/cli.py" --delete "$del_target" $yes_flag
-        exit $?
-    fi
-
-    # Mode 1: Romaji Transliteration Mode
-    if [ "$ROMAJI_MODE" = true ] && [ -z "$CLEAN_URL" ]; then
-        echo ""
-        echo -e "${BOLD}${CYAN}🎌 Starting Rockbox Romaji Transliteration...${RESET}"
-        local romaji_args=("-r" "$ROMAJI_ROOT" "-t" "$THREADS")
-        [ "$DRY_RUN" = true ] && romaji_args+=("-d")
-        local target="${ROMAJI_TARGET:-$PLAYLIST_NAME}"
-        if [ -n "$target" ]; then
-            romaji_args+=("-p" "$target")
-        elif [ "$ALL_MODE" = true ] || [ -z "$target" ]; then
-            romaji_args+=("-a")
-        fi
-        run_py "$SCRIPT_DIR/src/romaji/cli.py" "${romaji_args[@]}"
-        exit $?
-    fi
-
-    # Mode 2: Quality Patch Mode (e.g. MP3 -> FLAC)
-    if [ "$PATCH_MODE" = true ]; then
-        local patch_target="${PATCH_FILTER:-$PLAYLIST_NAME}"
-        echo ""
-        echo -e "${BOLD}${BLUE}🚀 Starting Quality Patch to ${PATCH_FORMAT^^}...${RESET}"
-        run_py "$SCRIPT_DIR/src/patch/cli.py" \
-            "$PATCH_FORMAT" \
-            "$TEMP_DIR" \
-            "$THREADS" \
-            "$KEEP_OLD" \
-            "$DRY_RUN" \
-            "$patch_target" \
-            "${YTDLP_JS_ARGS[*]:-}" \
-            "$ASSUME_YES"
-        cleanup_empty_dirs
-        echo ""
-        echo -e "${GREEN}🎉 Quality patch process completed successfully!${RESET}"
-        exit 0
-    fi
-
-    # Mode 3: Rockbox/DAP library-wide optimization
-    if [ "$OPTIMIZE_ALL" = true ] && [ -z "$CLEAN_URL" ] && [ "$FALLBACK_ONLY" = false ]; then
-        echo ""
-        echo -e "${BOLD}${CYAN}🚀 Starting comprehensive Rockbox/DAP library optimization...${RESET}"
-        orchestrate_dedup
-        orchestrate_covers "optimize" "all"
-        orchestrate_rockbox_tags
-        orchestrate_playlist_repair
-        cleanup_empty_dirs
-        echo ""
-        echo -e "${GREEN}🎉 Library optimization completed successfully!${RESET}"
-        exit 0
-    fi
-
-    # Mode 3b: Standalone deduplication
-    if [ "$DEDUP_MODE" = true ]; then
-        orchestrate_dedup
-        cleanup_empty_dirs
-        exit 0
-    fi
-
-    # Mode 3c: Standalone Rockbox metadata fix
-    if [ "$FIX_TAGS_MODE" = true ]; then
-        orchestrate_rockbox_tags
-        cleanup_empty_dirs
-        exit 0
-    fi
-
-    # Mode 3d: Standalone Library Status & Analytics Dashboard
-    if [ "$STATUS_MODE" = true ]; then
-        orchestrate_status
-        exit 0
-    fi
-
-    # Mode 3e: Standalone Playlist Audit & Repair
-    if [ "$REPAIR_PLAYLISTS_MODE" = true ]; then
-        orchestrate_playlist_repair
-        exit 0
-    fi
-
-    # Mode 4: Embed all covers
-    if [ "$EMBED_ALL" = true ] && [ -z "$CLEAN_URL" ] && [ "$FALLBACK_ONLY" = false ]; then
-        orchestrate_covers "embed" "all"
-        if [ "$GENRES_ALL" = true ]; then
-            orchestrate_genres "all"
-        fi
-        cleanup_empty_dirs
-        echo ""
-        echo -e "${GREEN}🎉 Cover art embedding completed successfully!${RESET}"
-        exit 0
-    fi
-
-    # Mode 5: Standalone genre enrichment
-    if [ "$GENRES_ALL" = true ] && [ -z "$CLEAN_URL" ] && [ "$FALLBACK_ONLY" = false ]; then
-        orchestrate_genres "all"
-        cleanup_empty_dirs
-        echo ""
-        echo -e "${GREEN}🎉 Genre enrichment completed successfully!${RESET}"
-        exit 0
-    fi
-
-    # Mode 6: Standalone missing lyrics search
-    if [ "$FETCH_LYRICS" = true ] && [ -z "$CLEAN_URL" ] && [ "$FALLBACK_ONLY" = false ]; then
-        orchestrate_lyrics "all"
-        cleanup_empty_dirs
-        echo ""
-        echo -e "${GREEN}🎉 Lyrics processing completed successfully!${RESET}"
-        exit 0
-    fi
-
-    # Mode 7: Fallback rescue
-    if [ "$FALLBACK_ONLY" = true ]; then
-        run_fallback_rescue
-        orchestrate_dedup
-        orchestrate_playlist_repair
-        if [ "$DO_OPTIMIZE" = true ]; then
-            orchestrate_covers "optimize" "session"
-            orchestrate_rockbox_tags
-        else
-            orchestrate_covers "embed" "session"
-        fi
-        orchestrate_genres "session"
-        if [ "$FETCH_LYRICS" = true ]; then
-            orchestrate_lyrics "session"
-        fi
-        cleanup_empty_dirs
-        echo ""
-        echo -e "${GREEN}🎉 Fallback rescue completed successfully!${RESET}"
-        exit 0
-    fi
-
-    # Mode 8: Standard Spotify download flow
-    run_spotdl_download
-    process_playlists
-    run_fallback_rescue
-
-    # Ensure no duplicates remain and playlists are synchronized
-    orchestrate_dedup
-    orchestrate_playlist_repair
-
-    if [ "$DO_OPTIMIZE" = true ]; then
-        orchestrate_covers "optimize" "session"
-        orchestrate_rockbox_tags
-    else
-        orchestrate_covers "embed" "session"
-    fi
-
-    orchestrate_genres "session"
-
-    if [ "$FETCH_LYRICS" = true ]; then
-        orchestrate_lyrics "session"
-    fi
-
-    if [ "$DO_ROMAJI" = true ]; then
-        echo ""
-        echo -e "${CYAN}🎌 Transliterating downloaded tracks to Romaji...${RESET}"
-        run_py "$SCRIPT_DIR/src/romaji/cli.py" -r "." -t "$THREADS" -a
-        orchestrate_playlist_repair
-    fi
-
-    cleanup_empty_dirs
-
-    echo ""
-    echo -e "${GREEN}🎉 Download & processing finished successfully!${RESET}"
-    exit 0
+    case "$SUBCOMMAND" in
+        download)   orchestrate_download ;;
+        search)     orchestrate_search ;;
+        rescue)     orchestrate_rescue ;;
+        status)     orchestrate_status ;;
+        dedup)      orchestrate_dedup ;;
+        patch)      orchestrate_patch ;;
+        optimize)   orchestrate_optimize ;;
+        album)      orchestrate_album "$SUBACTION" ;;
+        covers)     orchestrate_covers "$SUBACTION" ;;
+        lyrics)     orchestrate_lyrics "$SUBACTION" ;;
+        playlist)   orchestrate_playlist "$SUBACTION" ;;
+        tags)       orchestrate_tags "$SUBACTION" ;;
+        config)     handle_config_command "${COMMAND_ARGS[@]:-}" ;;
+        update)     perform_update ;;
+        uninstall)  perform_uninstall ;;
+        library)    orchestrate_library "$SUBACTION" ;;
+        *)
+            error_dual "Unrecognized command '$SUBCOMMAND'" "The specified command is not supported by syncdap" "$SUBCOMMAND" "" "Run 'syncdap --help' for usage instructions."
+            exit 2
+            ;;
+    esac
 }
 
 main "$@"

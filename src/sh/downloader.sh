@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Module: src/downloader.sh
+# Module: src/sh/downloader.sh
 # Purpose: Primary download orchestration via spotDL with format & bitrate control
 # ==============================================================================
 
 run_spotdl_download() {
-    echo ""
-    echo -e "${BLUE}📥 [1/5] Starting primary download via spotDL...${RESET}"
-    echo -e "   Target:  ${BOLD}$CLEAN_URL${RESET}"
-    echo -e "   Format:  ${GREEN}${AUDIO_EXT} (highest quality)${RESET}"
-    echo -e "   Threads: ${BOLD}$THREADS${RESET}"
+    if [ "$QUIET" = false ]; then
+        echo -e "${BLUE}${ICON_DL} [1/5] Starting primary download via spotDL...${RESET}" >&2
+        echo -e "   Target:  ${BOLD}$CLEAN_URL${RESET}" >&2
+        echo -e "   Format:  ${GREEN}${AUDIO_EXT} (highest quality)${RESET}" >&2
+        echo -e "   Threads: ${BOLD}$THREADS${RESET}" >&2
+    fi
 
     rm -f erros.spotdl
 

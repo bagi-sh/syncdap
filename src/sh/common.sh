@@ -1,21 +1,16 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Module: src/common.sh
+# Module: src/sh/common.sh
 # Purpose: Shared environment, helpers, dependency checks, and formatting
 # ==============================================================================
 
-# Exit flags
 set -uo pipefail
 
-# ANSI Color codes
-BOLD="\033[1m"
-GREEN="\033[1;32m"
-YELLOW="\033[1;33m"
-BLUE="\033[1;34m"
-MAGENTA="\033[1;35m"
-CYAN="\033[1;36m"
-RED="\033[1;31m"
-RESET="\033[0m"
+SYNCDAP_VERSION="2.0.0"
+
+# Source iconography and configuration modules
+source "$SCRIPT_DIR/src/sh/icons.sh"
+source "$SCRIPT_DIR/src/sh/config.sh"
 
 # Global state
 export PYTHONPATH="${SCRIPT_DIR}/src:${PYTHONPATH:-}"
@@ -26,48 +21,24 @@ CLEAN_URL=""
 AUDIO_FORMAT="mp3"
 THREADS=4
 SYNCED_ONLY=false
-DO_OPTIMIZE=false
-OPTIMIZE_ALL=false
-EMBED_ALL=false
-GENRES_ALL=false
-FETCH_LYRICS=false
-FALLBACK_ONLY=false
-PATCH_MODE=false
-PATCH_FORMAT=""
-PATCH_FILTER=""
-DELETE_PLAYLIST_MODE=false
-DELETE_PLAYLIST_TARGET=""
-PLAYLIST_MANAGER_MODE=false
-PLAYLIST_NAME=""
-MERGE_PLAYLIST_MODE=false
-MERGE_PL1=""
-MERGE_PL2=""
-MERGE_OUT=""
-ROMAJI_MODE=false
-ROMAJI_ROOT="."
-ROMAJI_TARGET=""
-ALL_MODE=false
 ASSUME_YES=false
 KEEP_OLD=false
 DRY_RUN=false
+VERBOSE=false
+QUIET=false
 TARGET_ROOT="."
-DEDUP_MODE=false
-FIX_TAGS_MODE=false
-STATUS_MODE=false
-REPAIR_PLAYLISTS_MODE=false
-TARGET_M3U=""
+FORCE_ICONS="auto"
 YTDLP_JS_ARGS=()
-UPDATE_MODE=false
-UNINSTALL_MODE=false
-EXPAND_ALBUMS_MODE=false
-EXPAND_TARGET=""
-SPLIT_MODE=false
-SPLIT_FILE=""
-AUDIT_DURATION_MODE=false
-EMBED_LYRICS_MODE=false
-SEARCH_QUERY=""
-ALLOW_LIVE=false
-ALLOW_REMIX=false
+
+# Load saved configuration defaults
+load_config
+if [ -n "${CONFIG_THREADS:-}" ]; then THREADS="$CONFIG_THREADS"; fi
+if [ -n "${CONFIG_FORMAT:-}" ]; then AUDIO_FORMAT="$CONFIG_FORMAT"; fi
+if [ -n "${CONFIG_ROOT_DIR:-}" ]; then TARGET_ROOT="$CONFIG_ROOT_DIR"; fi
+if [ "${CONFIG_SYNCED_ONLY:-}" = "true" ]; then SYNCED_ONLY=true; fi
+
+# Initialize terminal symbols & colors
+init_iconography
 
 resolve_music_root() {
     local base="${TARGET_ROOT:-.}"
@@ -78,7 +49,7 @@ resolve_music_root() {
     fi
 }
 
-# Python runner helper with mutagen, eyed3, requests, pykakasi
+# Python runner helper with dependencies
 run_py() {
     if command -v uv &>/dev/null; then
         uv run --offline --with mutagen,eyed3,requests,pykakasi python3 "$@" 2>/dev/null || \
@@ -96,7 +67,7 @@ run_spotdl() {
     elif command -v uv &>/dev/null; then
         uv run --with spotdl spotdl "$@"
     else
-        echo -e "${RED}❌ Error: spotdl is not installed and uv is unavailable.${RESET}" >&2
+        error_dual "spotDL is not available" "spotdl executable is not installed and uv runtime fallback failed" "" "" "Install spotDL: pip install spotdl or run with uv"
         return 1
     fi
 }
@@ -115,15 +86,15 @@ cleanup() {
 
 # Environment setup
 setup_environment() {
-    MARKER=$(mktemp -t spotdl_marker.XXXXXX 2>/dev/null || mktemp)
-    TEMP_DIR=$(mktemp -d -t spotdl_session.XXXXXX 2>/dev/null || mktemp -d)
+    [ -n "${TEMP_DIR:-}" ] && [ -d "$TEMP_DIR" ] && return 0
+    MARKER=$(mktemp -t syncdap_marker.XXXXXX 2>/dev/null || mktemp /tmp/syncdap_marker.XXXXXX)
+    TEMP_DIR=$(mktemp -d -t syncdap_session.XXXXXX 2>/dev/null || mktemp -d /tmp/syncdap_session.XXXXXX)
     trap cleanup EXIT INT TERM
     touch "$MARKER"
 }
 
 # Dependency validation
 check_dependencies() {
-    echo -e "${CYAN}🔍 Checking system dependencies...${RESET}"
     local required_deps=(yt-dlp ffmpeg python3 uv grep curl)
     local missing_deps=()
 
@@ -138,10 +109,7 @@ check_dependencies() {
     fi
 
     if [ ${#missing_deps[@]} -gt 0 ]; then
-        echo -e "${RED}❌ Error: Missing required tools:${RESET}"
-        for dep in "${missing_deps[@]}"; do
-            echo "   - $dep"
-        done
+        error_dual "Missing required system dependencies" "One or more required binaries were not found in PATH" "${missing_deps[*]}" "" "Install the missing tools via your package manager or installer."
         exit 1
     fi
 
@@ -188,9 +156,8 @@ validate_format() {
             AUDIO_EXT="wav"
             ;;
         *)
-            echo -e "${RED}❌ Error: Unsupported audio format '$fmt'.${RESET}"
-            echo "Supported formats: flac, mp3, m4a, opus, ogg, wav"
-            exit 1
+            error_dual "Unsupported audio format '$fmt'" "Audio container format is not supported" "$fmt" "" "Supported formats: flac, mp3, m4a, opus, ogg, wav"
+            exit 2
             ;;
     esac
 }
@@ -200,28 +167,28 @@ cleanup_empty_dirs() {
     find . -mindepth 1 -type d -empty ! -path "./Playlists*" -delete 2>/dev/null || true
 }
 
-# --- UPDATE & UNINSTALL HANDLERS ---
+# Update handler
 perform_update() {
-    echo -e "${BOLD}${BLUE}🔄 Checking for syncdap updates...${RESET}"
+    if [ "$QUIET" = false ]; then
+        echo -e "${ICON_INFO} Checking for syncdap updates..." >&2
+    fi
     if [ -f "$SCRIPT_DIR/install.sh" ]; then
         bash "$SCRIPT_DIR/install.sh" --update
     elif [ -d "$SCRIPT_DIR/.git" ]; then
-        echo -e "${CYAN}📥 Pulling latest commits from git repository...${RESET}"
         git -C "$SCRIPT_DIR" pull --rebase
         if command -v uv &>/dev/null; then
-            echo -e "${CYAN}⚡ Refreshing Python dependencies cache...${RESET}"
-            uv run --with mutagen,eyed3,requests,pykakasi,syncedlyrics python3 -c "import mutagen, eyed3, requests, pykakasi; print('✅ Dependencies updated')" 2>/dev/null || true
+            uv run --with mutagen,eyed3,requests,pykakasi,syncedlyrics python3 -c "import mutagen, eyed3, requests, pykakasi; print('Dependencies updated')" 2>/dev/null || true
         fi
-        echo -e "${GREEN}✅ syncdap updated successfully!${RESET}"
+        echo -e "${GREEN}${ICON_OK} syncdap updated successfully.${RESET}"
     else
-        echo -e "${RED}❌ Error: Cannot update. No git repository or install.sh found in $SCRIPT_DIR.${RESET}"
+        error_dual "Cannot update" "No git repository or install.sh found in $SCRIPT_DIR" "$SCRIPT_DIR" "" "Clone the repository using git or re-run the installer."
         exit 1
     fi
     exit 0
 }
 
+# Uninstall handler
 perform_uninstall() {
-    echo -e "${BOLD}${YELLOW}⚠️  Uninstall syncdap${RESET}"
     local yes_flag=""
     [ "$ASSUME_YES" = true ] && yes_flag="-y"
     if [ -f "$SCRIPT_DIR/install.sh" ]; then
@@ -231,7 +198,6 @@ perform_uninstall() {
 
     local target_bin
     target_bin="$(command -v syncdap 2>/dev/null || true)"
-    echo -e "${YELLOW}This will remove syncdap from your system.${RESET}"
     if [ "$ASSUME_YES" != true ]; then
         read -rp "Are you sure you want to uninstall syncdap? [y/N]: " confirm
         case "$confirm" in
@@ -241,15 +207,13 @@ perform_uninstall() {
     fi
 
     if [ -n "$target_bin" ] && [ -L "$target_bin" ]; then
-        echo "Removing launcher: $target_bin"
         rm -f "$target_bin"
     fi
 
     if [ -d "$SCRIPT_DIR" ] && [[ "$SCRIPT_DIR" == *"/syncdap"* ]]; then
-        echo "Removing installation files: $SCRIPT_DIR"
         rm -rf "$SCRIPT_DIR"
     fi
 
-    echo -e "${GREEN}✅ syncdap has been completely uninstalled.${RESET}"
+    echo -e "${GREEN}${ICON_OK} syncdap has been completely uninstalled.${RESET}"
     exit 0
 }

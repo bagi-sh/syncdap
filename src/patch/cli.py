@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/patch/cli.py
-# Purpose: CLI argument parser and batch execution for patch operations
-# ==============================================================================
+"""Audio format upgrade and quality patching CLI."""
 
 import os
 import sys
@@ -13,7 +10,7 @@ lib_dir = Path(__file__).resolve().parent.parent
 if str(lib_dir) not in sys.path:
     sys.path.insert(0, str(lib_dir))
 
-from share import find_playlist_file, AUDIO_EXTENSIONS
+from share import find_playlist_file, AUDIO_EXTENSIONS, ICONS
 from patch.playlist import handle_playlist_patch
 from patch.worker import upgrade_track
 
@@ -21,7 +18,7 @@ from patch.worker import upgrade_track
 def main():
     if len(sys.argv) < 3:
         print("Usage: patch.py <target_format> <temp_dir> [threads] [keep_old] [dry_run] [filter_term] [js_args] [assume_yes]")
-        sys.exit(1)
+        sys.exit(2)
 
     target_format = sys.argv[1].lower()
     temp_dir = sys.argv[2]
@@ -57,14 +54,14 @@ def main():
 
     total = len(files_to_upgrade)
     if total == 0:
-        print(f"   ✨ No tracks requiring patch to {target_format.upper()} were found.")
+        print(f"  {ICONS.info} No tracks requiring patch to {target_format.upper()} were found.")
         sys.exit(0)
 
-    print(f"   Found {total} track(s) for quality patch to {target_format.upper()} using {threads} worker(s)...")
+    print(f"  {ICONS.disc} Found {total} track(s) for quality patch to {target_format.upper()} using {threads} worker(s)...")
     if keep_old:
-        print("   🛡️ Mode: --keep-old enabled (original files will not be deleted).")
+        print(f"  {ICONS.info} Mode: --keep-old enabled (original files will not be deleted).")
     if dry_run:
-        print("   🔍 Mode: --dry-run enabled (simulating patch without changes).")
+        print(f"  {ICONS.info} Mode: --dry-run enabled (simulating patch without changes).")
 
     counters = {'upgraded': 0, 'skipped': 0, 'failed': 0}
     lock = threading.Lock()
@@ -89,7 +86,7 @@ def main():
         for f in futures:
             f.result()
 
-    print(f"\n   📊 Patch completed: {counters['upgraded']} patched, {counters['skipped']} skipped, {counters['failed']} failed out of {total}.")
+    print(f"\n  {ICONS.ok} Patch completed: {counters['upgraded']} patched, {counters['skipped']} skipped, {counters['failed']} failed out of {total}.")
 
 
 if __name__ == '__main__':

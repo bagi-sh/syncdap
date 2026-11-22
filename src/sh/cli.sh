@@ -1,168 +1,272 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Module: src/sh/cli.sh
-# Purpose: CLI help presentation and command-line argument parsing
+# Purpose: CLI help presentation, command grammar, and argument parsing
 # ==============================================================================
 
 show_help() {
-    cat << 'EOF'
-Usage: syncdap [OPTIONS] <URL> | [COMMAND] [OPTIONS]
+    cat << EOF
+Usage: syncdap <resource> [action] [options]
 
-Commands:
-  <URL>                        Download album, playlist, or track from Spotify
-  -p, --patch [FMT] [TARGET]   Upgrade library/playlist audio format (default: flac)
-  -R, --romaji [TARGET]        Transliterate Japanese tags/paths to Hepburn Romaji
-  -P, --playlist [NAME]        Interactive playlist manager (create/edit/delete)
-  -M, --merge PL1 PL2 [OUT]    Merge two playlists and deduplicate tracks
-  -D, --delete [PLAYLIST]      Delete a playlist and prompt to purge audio files
-  -o, --optimize               Optimize for Rockbox/DAP (strip art, dedup, fix tags)
-  -e, --embed                  Re-embed cover.jpg art into audio files
-  --dedup                      Deduplicate tracks keeping highest audio quality
-  --fix-tags                   Audit and unify album/artist tags for Rockbox
-  --repair-playlists           Relink moved/renamed tracks and prune dead paths
-  -g, --genres                 Enrich genre tags via iTunes, Deezer & MusicBrainz
-  -l, --lyrics                 Scan and download missing timestamped .lrc lyrics
-  -s, --status                 Show music library health and statistics dashboard
-  -f, --fallback [URL]         Direct yt-dlp rescue (or retry erros.spotdl)
-  --expand-albums [FILE]       Expand bundled full-album rip(s) into individual tagged tracks via re-download
-  --unbundle [FILE]            Alias for --expand-albums
-  --audit-duration             Audit library tracks >10m to detect accidental full-album rips
-  --embed-lyrics               Scan library and embed lyrics directly into audio metadata
-  --search <QUERY>             Search track/album by name without URL
-  --update                     Update syncdap to latest git commits and tools
-  --uninstall                  Completely remove syncdap from system
+Rockbox and Digital Audio Player (DAP) music library synchronization manager.
+
+Resources:
+  download <URL>   Download track, album, or playlist from Spotify
+  search <query>   Search track or album by name via metadata APIs
+  rescue [target]  Stream recovery via fallback downloader
+  status           Display library health and statistics dashboard
+  library          Library-wide maintenance (dedup, optimize)
+  album            Album rip unbundling and duration auditing
+  covers           Album artwork extraction and tag embedding
+  lyrics           Synchronized LRC lyrics maintenance and embedding
+  playlist         M3U/M3U8 playlist management, repair, and cleanup
+  tags             Audio metadata standardization and transliteration
+  config           Inspect or modify persistent configuration
+  update           Update syncdap to latest git commit
+  uninstall        Completely remove syncdap from system
 
 Options:
-  -a, --all                    Apply to entire music library root
-  -d, --dry-run                Preview actions without modifying files on disk
-  -y, --yes                    Skip confirmation prompts (non-interactive)
-  -F, --format <FMT>           Audio format: flac, mp3, m4a, opus, ogg, wav
-  -P, --playlist <NAME>        Target specific playlist (.m3u8)
-  -r, --root-dir <DIR>         Music library / DAP mount directory (default: .)
-  -t, --threads <NUM>          Worker thread concurrency (default: 4)
-  --allow-live                 Allow live versions in candidate filter
-  --allow-remix                Allow remixes in candidate filter
-  --synced-only                Only fetch timestamped [mm:ss] synced lyrics
-  --keep-old                   Retain original files during patch/upgrade
-  -h, --help                   Display this help message
+  -c, --config <path>   Use custom configuration file
+  -r, --root-dir <path> Target music library or DAP mount root (default: .)
+  -t, --threads <num>   Worker thread concurrency (default: 4)
+  -F, --format <fmt>    Audio format: flac, mp3, m4a, opus, ogg, wav
+  -n, --dry-run         Simulate execution without modifying files
+  -y, --yes             Skip interactive confirmation prompts
+  -v, --verbose         Show detailed execution diagnostics on stderr
+  -q, --quiet           Suppress non-error status output
+  --json                Output machine-readable JSON array or object
+  --plain               Output headerless tab-separated plain text
+  --icons / --no-icons  Force enable or disable Nerd Font symbols
+  -V, --version         Print version information
+  -h, --help            Print help information
 EOF
 }
 
+show_resource_help() {
+    local res="${1:-}"
+    case "$res" in
+        library)
+            cat << EOF
+Usage: syncdap library <action> [options]
+
+Library-wide maintenance and optimization utilities.
+
+Actions:
+  dedup       Deduplicate tracks keeping highest audio quality
+  optimize    Execute complete Rockbox/DAP library optimization pipeline
+
+Options:
+  -r, --root-dir <path> Target music library or DAP mount root
+  -n, --dry-run         Simulate execution without modifying files
+  -v, --verbose         Show detailed execution diagnostics
+EOF
+            ;;
+        album)
+            cat << EOF
+Usage: syncdap album <action> [options]
+
+Album unbundling and full-album rip duration auditing.
+
+Actions:
+  expand [file]  Unbundle full-album single-file rip(s) into individual tracks
+  audit          Audit library tracks >10m against metadata APIs
+
+Options:
+  -r, --root-dir <path> Target music library or DAP mount root
+  -F, --format <fmt>    Target audio format for re-downloaded tracks
+  -n, --dry-run         Simulate execution without modifying files
+  --json                Output audit results as machine-readable JSON
+EOF
+            ;;
+        covers)
+            cat << EOF
+Usage: syncdap covers <action> [options]
+
+Album artwork extraction and tag embedding.
+
+Actions:
+  optimize    Extract cover.jpg and strip embedded art (Rockbox DAP mode)
+  embed       Embed cover.jpg from album directory into audio tags
+
+Options:
+  -r, --root-dir <path> Target music library or DAP mount root
+  -n, --dry-run         Simulate execution without modifying files
+  -v, --verbose         Show detailed execution diagnostics
+EOF
+            ;;
+        lyrics)
+            cat << EOF
+Usage: syncdap lyrics <action> [options]
+
+Synchronized LRC lyrics maintenance and metadata embedding.
+
+Actions:
+  fetch       Scan and download missing timestamped .lrc lyrics
+  embed       Embed lyrics directly into audio metadata tags
+
+Options:
+  -r, --root-dir <path> Target music library or DAP mount root
+  --synced-only         Accept only timestamped [mm:ss] lyrics
+  -t, --threads <num>   Worker thread concurrency (default: 4)
+  -n, --dry-run         Simulate execution without modifying files
+EOF
+            ;;
+        playlist)
+            cat << EOF
+Usage: syncdap playlist <action> [options]
+
+M3U/M3U8 playlist creation, maintenance, and repair.
+
+Actions:
+  manage [name]          Interactive terminal playlist manager
+  merge <p1> <p2> [out]  Merge two playlists and deduplicate shared tracks
+  delete <name>          Delete playlist file and optionally purge tracks
+  repair                 Relink moved or renamed audio files in playlists
+
+Options:
+  -r, --root-dir <path>  Target music library or DAP mount root
+  -n, --dry-run          Simulate execution without modifying files
+  -y, --yes              Skip interactive confirmation prompts
+EOF
+            ;;
+        tags)
+            cat << EOF
+Usage: syncdap tags <action> [options]
+
+Audio metadata standardization and transliteration.
+
+Actions:
+  fix              Unify ALBUM/ALBUMARTIST tags and clean ghost files
+  genres           Enrich missing genre tags via multi-API fallback
+  romaji [target]  Transliterate Japanese tags and paths to Romaji
+
+Options:
+  -r, --root-dir <path> Target music library or DAP mount root
+  -n, --dry-run         Simulate execution without modifying files
+  -v, --verbose         Show detailed execution diagnostics
+EOF
+            ;;
+        config)
+            cat << EOF
+Usage: syncdap config [action] [options]
+
+Inspect or modify persistent syncdap configuration.
+
+Actions:
+  <key>=<value>    Set configuration value (e.g. syncdap config icons=true)
+  set <key> <val>  Set a configuration key and value
+  get <key>        Retrieve a configuration value
+  list             Display current configuration values
+  init             Initialize default configuration file
+EOF
+            ;;
+        status)
+            cat << EOF
+Usage: syncdap status [options]
+
+Display library health and statistics dashboard.
+
+Options:
+  -r, --root-dir <path> Target music library or DAP mount root
+  --json                Output machine-readable JSON dashboard
+  --plain               Output tab-separated plain text summary
+EOF
+            ;;
+        download)
+            cat << EOF
+Usage: syncdap [download] <URL> [options]
+
+Ingest track, album, or playlist from Spotify.
+
+Options:
+  -r, --root-dir <path> Target music library or DAP mount root
+  -F, --format <fmt>    Audio format: flac, mp3, m4a, opus, ogg, wav
+  -t, --threads <num>   Worker thread concurrency (default: 4)
+  --synced-only         Accept only timestamped synchronized lyrics
+EOF
+            ;;
+        search)
+            cat << EOF
+Usage: syncdap search <query> [options]
+
+Search track or album by name via metadata APIs and download.
+
+Options:
+  -r, --root-dir <path> Target music library or DAP mount root
+  -F, --format <fmt>    Audio format: flac, mp3, m4a, opus, ogg, wav
+  --json                Output search metadata as JSON without downloading
+EOF
+            ;;
+        rescue)
+            cat << EOF
+Usage: syncdap rescue [target] [options]
+
+Stream recovery via fallback downloader (or retry erros.spotdl).
+
+Options:
+  -r, --root-dir <path> Target music library or DAP mount root
+  -F, --format <fmt>    Audio format: flac, mp3, m4a, opus, ogg, wav
+  -t, --threads <num>   Worker thread concurrency (default: 4)
+EOF
+            ;;
+        patch)
+            cat << EOF
+Usage: syncdap patch [format] [target] [options]
+
+Transcode or upgrade tracks to target audio format.
+
+Options:
+  -r, --root-dir <path> Target music library or DAP mount root
+  -t, --threads <num>   Worker thread concurrency (default: 4)
+  --keep-old            Retain original files alongside converted files
+  -n, --dry-run         Simulate execution without modifying files
+  -y, --yes             Skip interactive confirmation prompts
+EOF
+            ;;
+        *)
+            show_help
+            ;;
+    esac
+}
+
+show_version() {
+    echo "syncdap ${SYNCDAP_VERSION:-2.0.0}"
+}
+
+# Subcommand state variables
+SUBCOMMAND=""
+SUBACTION=""
+COMMAND_ARGS=()
+OUTPUT_FORMAT="table"
+
 parse_arguments() {
     if [ $# -eq 0 ]; then
-        echo -e "${RED}❌ Error: No URL or command provided.${RESET}"
-        echo ""
         show_help
-        exit 1
+        exit 0
     fi
 
-    while [[ $# -gt 0 ]]; do
+    local raw_positionals=()
+    local help_requested=false
+
+    while [ $# -gt 0 ]; do
         case "$1" in
             -h|--help)
-                show_help
+                help_requested=true
+                shift 1
+                ;;
+            -V|--version)
+                show_version
                 exit 0
                 ;;
-            --update)
-                UPDATE_MODE=true
+            -v|--verbose)
+                VERBOSE=true
                 shift 1
                 ;;
-            --uninstall|--unistall)
-                UNINSTALL_MODE=true
+            -q|--quiet)
+                QUIET=true
                 shift 1
                 ;;
-            -F|--format)
-                if [[ $# -lt 2 ]] || [[ "$2" =~ ^- ]]; then
-                    echo -e "${RED}❌ Error: --format requires an argument (flac, mp3, m4a, opus, ogg, wav).${RESET}"
-                    exit 1
-                fi
-                AUDIO_FORMAT="$2"
-                PATCH_FORMAT="$2"
-                shift 2
-                ;;
-            -p|--patch|-u|--upgrade)
-                PATCH_MODE=true
-                if [[ $# -gt 1 ]] && ! [[ "$2" =~ ^- ]]; then
-                    PATCH_FORMAT="$2"
-                    shift 2
-                else
-                    PATCH_FORMAT="${PATCH_FORMAT:-flac}"
-                    shift 1
-                fi
-                ;;
-            -R|--romaji|--transliterate|--rockbox-romaji)
-                ROMAJI_MODE=true
-                DO_ROMAJI=true
-                shift 1
-                if [[ $# -gt 0 ]] && ! [[ "$1" =~ ^- ]]; then
-                    ROMAJI_TARGET="$1"
-                    shift 1
-                fi
-                ;;
-            -P|--playlist)
-                if [[ $# -gt 1 ]] && ! [[ "$2" =~ ^- ]]; then
-                    PLAYLIST_NAME="$2"
-                    shift 2
-                else
-                    PLAYLIST_MANAGER_MODE=true
-                    shift 1
-                fi
-                ;;
-            -D|--delete|--delete-playlist)
-                DELETE_PLAYLIST_MODE=true
-                if [[ $# -gt 1 ]] && ! [[ "$2" =~ ^- ]]; then
-                    DELETE_PLAYLIST_TARGET="$2"
-                    shift 2
-                else
-                    shift 1
-                fi
-                ;;
-            -M|--merge|--merge-playlists)
-                MERGE_PLAYLIST_MODE=true
-                if [[ $# -lt 3 ]] || [[ "$2" =~ ^- ]] || [[ "$3" =~ ^- ]]; then
-                    echo -e "${RED}❌ Error: --merge requires two source playlist names (e.g. 'syncdap --merge pl1 pl2 [out]').${RESET}"
-                    exit 1
-                fi
-                MERGE_PL1="$2"
-                MERGE_PL2="$3"
-                shift 3
-                if [[ $# -gt 0 ]] && ! [[ "$1" =~ ^- ]]; then
-                    MERGE_OUT="$1"
-                    shift 1
-                fi
-                ;;
-            -r|--root-dir)
-                if [[ $# -lt 2 ]] || [[ "$2" =~ ^- ]]; then
-                    echo -e "${RED}❌ Error: --root-dir requires a directory path.${RESET}"
-                    exit 1
-                fi
-                ROMAJI_ROOT="$2"
-                TARGET_ROOT="$2"
-                shift 2
-                ;;
-            --dedup|--deduplicate)
-                DEDUP_MODE=true
-                shift 1
-                ;;
-            --fix-tags|--rockbox-tags|--metadata)
-                FIX_TAGS_MODE=true
-                shift 1
-                ;;
-            -s|--status|--stats)
-                STATUS_MODE=true
-                shift 1
-                ;;
-            --repair-playlists|--playlists-repair)
-                REPAIR_PLAYLISTS_MODE=true
-                shift 1
-                ;;
-            -a|--all)
-                ALL_MODE=true
-                OPTIMIZE_ALL=true
-                EMBED_ALL=true
-                GENRES_ALL=true
-                shift 1
-                ;;
-            -d|--dry-run)
+            -n|--dry-run|-d)
                 DRY_RUN=true
                 shift 1
                 ;;
@@ -170,176 +274,199 @@ parse_arguments() {
                 ASSUME_YES=true
                 shift 1
                 ;;
-            --filter)
-                if [[ $# -gt 1 ]] && ! [[ "$2" =~ ^- ]]; then
-                    PATCH_FILTER="$2"
-                    shift 2
-                else
-                    echo -e "${RED}❌ Error: --filter requires a search term or playlist.${RESET}"
-                    exit 1
-                fi
-                ;;
             --keep-old)
                 KEEP_OLD=true
-                shift 1
-                ;;
-            -o|--optimize|--optimize-all)
-                DO_OPTIMIZE=true
-                OPTIMIZE_ALL=true
-                shift 1
-                ;;
-            -e|--embed|--embed-all|--revert-optimize|--embed-covers)
-                EMBED_ALL=true
-                shift 1
-                ;;
-            -g|--genres|--genres-all)
-                GENRES_ALL=true
-                shift 1
-                ;;
-            -l|--lyrics)
-                FETCH_LYRICS=true
                 shift 1
                 ;;
             --synced-only)
                 SYNCED_ONLY=true
                 shift 1
                 ;;
+            --json)
+                OUTPUT_FORMAT="json"
+                shift 1
+                ;;
+            --plain)
+                OUTPUT_FORMAT="plain"
+                shift 1
+                ;;
+            --icons)
+                FORCE_ICONS="true"
+                init_iconography
+                shift 1
+                ;;
+            --no-icons)
+                FORCE_ICONS="false"
+                init_iconography
+                shift 1
+                ;;
+            -F|--format)
+                if [[ $# -lt 2 ]] || [[ "$2" =~ ^- ]]; then
+                    error_dual "Missing format argument" "-F / --format requires an audio format" "" "" "Specify flac, mp3, m4a, opus, ogg, or wav"
+                    exit 2
+                fi
+                validate_format "$2"
+                AUDIO_FORMAT="$2"
+                shift 2
+                ;;
+            -r|--root-dir)
+                if [[ $# -lt 2 ]] || [[ "$2" =~ ^- ]]; then
+                    error_dual "Missing directory path" "-r / --root-dir requires a directory path" "" "" "Pass a valid directory path: syncdap -r /mnt/dap"
+                    exit 2
+                fi
+                TARGET_ROOT="$2"
+                shift 2
+                ;;
             -t|--threads)
-                if [[ $# -lt 2 ]] || ! [[ "$2" =~ ^[0-9]+$ ]] || [ "$2" -le 0 ]; then
-                    echo -e "${RED}❌ Error: --threads requires a positive integer.${RESET}"
-                    exit 1
+                if [[ $# -lt 2 ]] || [[ "$2" =~ ^- ]]; then
+                    error_dual "Missing thread count" "-t / --threads requires a number" "" "" "Specify thread count: syncdap -t 4"
+                    exit 2
                 fi
                 THREADS="$2"
                 shift 2
                 ;;
-            -f|--fallback|--fallback-only)
-                FALLBACK_ONLY=true
-                shift 1
-                if [[ $# -gt 0 ]] && [[ "$1" =~ ^https://open\.spotify\.com/ ]]; then
-                    RAW_URL="$1"
-                    shift 1
-                fi
-                ;;
-            --expand-albums|--unbundle|--split)
-                EXPAND_ALBUMS_MODE=true
-                SPLIT_MODE=true
-                if [[ $# -gt 1 ]] && ! [[ "$2" =~ ^- ]]; then
-                    EXPAND_TARGET="$2"
-                    SPLIT_FILE="$2"
-                    shift 2
-                else
-                    shift 1
-                fi
-                ;;
-            --audit-duration|--audit)
-                AUDIT_DURATION_MODE=true
-                shift 1
-                ;;
-            --embed-lyrics)
-                EMBED_LYRICS_MODE=true
-                shift 1
-                ;;
-            --search)
+            -c|--config)
                 if [[ $# -lt 2 ]] || [[ "$2" =~ ^- ]]; then
-                    echo -e "${RED}❌ Error: --search requires a search query.${RESET}"
-                    exit 1
+                    error_dual "Missing config path" "-c / --config requires a configuration file" "" "" "Pass a path: syncdap -c ~/.config/syncdap/config"
+                    exit 2
                 fi
-                SEARCH_QUERY="$2"
+                CONFIG_FILE="$2"
+                load_config
                 shift 2
                 ;;
-            --allow-live)
-                ALLOW_LIVE=true
-                shift 1
-                ;;
-            --allow-remix)
-                ALLOW_REMIX=true
-                shift 1
-                ;;
-            https://open.spotify.com/*)
-                RAW_URL="$1"
-                shift 1
+            -*)
+                error_dual "Unrecognized option '$1'" "The specified option is not supported" "$1" "" "Run 'syncdap --help' for available options."
+                exit 2
                 ;;
             *)
-                if [ "$PATCH_MODE" = true ] && [ -z "$PATCH_FILTER" ]; then
-                    PATCH_FILTER="$1"
-                    shift 1
-                elif [ "$DELETE_PLAYLIST_MODE" = true ] && [ -z "$DELETE_PLAYLIST_TARGET" ]; then
-                    DELETE_PLAYLIST_TARGET="$1"
-                    shift 1
-                elif [ "$ROMAJI_MODE" = true ] && [ -z "$ROMAJI_TARGET" ]; then
-                    ROMAJI_TARGET="$1"
-                    shift 1
-                elif [ "$EXPAND_ALBUMS_MODE" = true ] && [ -z "$EXPAND_TARGET" ]; then
-                    EXPAND_TARGET="$1"
-                    SPLIT_FILE="$1"
-                    shift 1
-                elif [ "$SPLIT_MODE" = true ] && [ -z "$SPLIT_FILE" ]; then
-                    SPLIT_FILE="$1"
-                    EXPAND_TARGET="$1"
-                    shift 1
-                elif [ -z "$RAW_URL" ] && [ -z "$SEARCH_QUERY" ]; then
-                    SEARCH_QUERY="$1"
-                    shift 1
-                else
-                    echo -e "${RED}❌ Error: Unrecognized argument: $1${RESET}"
-                    echo "Run '$0 --help' for usage instructions."
-                    exit 1
-                fi
+                raw_positionals+=("$1")
+                shift 1
                 ;;
         esac
     done
 
-    # Immediate return for update or uninstall
-    if [ "$UPDATE_MODE" = true ] || [ "$UNINSTALL_MODE" = true ]; then
+    # Handle help request if triggered
+    if [ "$help_requested" = true ]; then
+        if [ ${#raw_positionals[@]} -gt 0 ]; then
+            show_resource_help "${raw_positionals[0]}"
+        else
+            show_help
+        fi
+        exit 0
+    fi
+
+    if [ ${#raw_positionals[@]} -eq 0 ]; then
+        show_help
+        exit 0
+    fi
+
+    local first="${raw_positionals[0]}"
+
+    # Support 'syncdap help <resource>' syntax
+    if [ "$first" = "help" ]; then
+        if [ ${#raw_positionals[@]} -gt 1 ]; then
+            show_resource_help "${raw_positionals[1]}"
+        else
+            show_help
+        fi
+        exit 0
+    fi
+
+    # Automatic detection for Spotify URL
+    if [[ "$first" =~ ^https://open\.spotify\.com/ ]] || [[ "$first" =~ ^spotify: ]]; then
+        SUBCOMMAND="download"
+        RAW_URL="$first"
         return 0
     fi
 
-    # Resolve cross-compatible playlist target
-    if [ -n "$PLAYLIST_NAME" ]; then
-        if [ "$PATCH_MODE" = true ] && [ -z "$PATCH_FILTER" ]; then
-            PATCH_FILTER="$PLAYLIST_NAME"
-        elif [ "$DELETE_PLAYLIST_MODE" = true ] && [ -z "$DELETE_PLAYLIST_TARGET" ]; then
-            DELETE_PLAYLIST_TARGET="$PLAYLIST_NAME"
-        elif [ "$ROMAJI_MODE" = true ] && [ -z "$ROMAJI_TARGET" ]; then
-            ROMAJI_TARGET="$PLAYLIST_NAME"
-        elif [ "$PATCH_MODE" = false ] && [ "$DELETE_PLAYLIST_MODE" = false ] && [ "$ROMAJI_MODE" = false ] && [ -z "$RAW_URL" ]; then
-            PLAYLIST_MANAGER_MODE=true
-        fi
-    fi
+    SUBCOMMAND="$first"
 
-    # Clean Spotify URL if provided
-    if [ -n "$RAW_URL" ]; then
-        CLEAN_URL=$(echo "$RAW_URL" | grep -oE 'https://open\.spotify\.com/(playlist|album|track)/[a-zA-Z0-9]+' | head -n 1)
-        if [ -z "$CLEAN_URL" ]; then
-            echo -e "${RED}❌ Error: Invalid Spotify URL.${RESET}"
-            exit 1
-        fi
-    fi
+    # Route hierarchical resources
+    case "$SUBCOMMAND" in
+        library|album|covers|lyrics|playlist|tags)
+            if [ ${#raw_positionals[@]} -lt 2 ]; then
+                error_dual "Missing action for '$SUBCOMMAND'" "Resource requires a specific action" "syncdap $SUBCOMMAND" "" "Run 'syncdap $SUBCOMMAND --help' to view available actions."
+                exit 2
+            fi
+            SUBACTION="${raw_positionals[1]}"
+            if [ ${#raw_positionals[@]} -gt 2 ]; then
+                COMMAND_ARGS=("${raw_positionals[@]:2}")
+            fi
 
-    # Format validation
-    if [ "$PATCH_MODE" = true ]; then
-        validate_format "$PATCH_FORMAT"
-    else
-        validate_format "$AUDIO_FORMAT"
-    fi
-
-    # Action validation
-    if [ "$PLAYLIST_MANAGER_MODE" = false ] && [ "$MERGE_PLAYLIST_MODE" = false ] && \
-       [ "$DELETE_PLAYLIST_MODE" = false ] && [ "$PATCH_MODE" = false ] && [ "$ROMAJI_MODE" = false ] && \
-       [ "$OPTIMIZE_ALL" = false ] && [ "$EMBED_ALL" = false ] && \
-       [ "$GENRES_ALL" = false ] && [ "$FETCH_LYRICS" = false ] && [ "$FALLBACK_ONLY" = false ] && \
-       [ "$DEDUP_MODE" = false ] && [ "$FIX_TAGS_MODE" = false ] && [ "$STATUS_MODE" = false ] && \
-       [ "$REPAIR_PLAYLISTS_MODE" = false ] && [ "$EXPAND_ALBUMS_MODE" = false ] && [ "$SPLIT_MODE" = false ] && \
-       [ "$AUDIT_DURATION_MODE" = false ] && [ "$EMBED_LYRICS_MODE" = false ] && \
-       [ -z "$SEARCH_QUERY" ] && [ -z "$CLEAN_URL" ]; then
-        echo -e "${RED}❌ Error: No valid action or URL specified.${RESET}"
-        echo ""
-        show_help
-        exit 1
-    fi
-
-    if [ "$FALLBACK_ONLY" = true ] && [ -z "$CLEAN_URL" ] && [ ! -s "erros.spotdl" ]; then
-        echo -e "${RED}❌ Error: --fallback requested without URL, but no 'erros.spotdl' file was found.${RESET}"
-        exit 1
-    fi
+            # Validate actions per resource
+            case "$SUBCOMMAND" in
+                library)
+                    if [[ "$SUBACTION" != "dedup" && "$SUBACTION" != "optimize" ]]; then
+                        error_dual "Invalid action '$SUBACTION' for 'library'" "Supported actions: dedup, optimize" "syncdap library $SUBACTION" "" "Run 'syncdap library --help' for available actions."
+                        exit 2
+                    fi
+                    ;;
+                album)
+                    if [[ "$SUBACTION" != "expand" && "$SUBACTION" != "audit" ]]; then
+                        error_dual "Invalid action '$SUBACTION' for 'album'" "Supported actions: expand, audit" "syncdap album $SUBACTION" "" "Run 'syncdap album --help' for available actions."
+                        exit 2
+                    fi
+                    ;;
+                covers)
+                    if [[ "$SUBACTION" != "optimize" && "$SUBACTION" != "embed" ]]; then
+                        error_dual "Invalid action '$SUBACTION' for 'covers'" "Supported actions: optimize, embed" "syncdap covers $SUBACTION" "" "Run 'syncdap covers --help' for available actions."
+                        exit 2
+                    fi
+                    ;;
+                lyrics)
+                    if [[ "$SUBACTION" != "fetch" && "$SUBACTION" != "embed" ]]; then
+                        error_dual "Invalid action '$SUBACTION' for 'lyrics'" "Supported actions: fetch, embed" "syncdap lyrics $SUBACTION" "" "Run 'syncdap lyrics --help' for available actions."
+                        exit 2
+                    fi
+                    ;;
+                playlist)
+                    if [[ "$SUBACTION" != "manage" && "$SUBACTION" != "merge" && "$SUBACTION" != "delete" && "$SUBACTION" != "repair" ]]; then
+                        error_dual "Invalid action '$SUBACTION' for 'playlist'" "Supported actions: manage, merge, delete, repair" "syncdap playlist $SUBACTION" "" "Run 'syncdap playlist --help' for available actions."
+                        exit 2
+                    fi
+                    ;;
+                tags)
+                    if [[ "$SUBACTION" != "fix" && "$SUBACTION" != "genres" && "$SUBACTION" != "romaji" ]]; then
+                        error_dual "Invalid action '$SUBACTION' for 'tags'" "Supported actions: fix, genres, romaji" "syncdap tags $SUBACTION" "" "Run 'syncdap tags --help' for available actions."
+                        exit 2
+                    fi
+                    ;;
+            esac
+            ;;
+        config)
+            if [ ${#raw_positionals[@]} -gt 1 ]; then
+                COMMAND_ARGS=("${raw_positionals[@]:1}")
+            fi
+            ;;
+        download|search|rescue|status|patch|update|uninstall)
+            if [ ${#raw_positionals[@]} -gt 1 ]; then
+                COMMAND_ARGS=("${raw_positionals[@]:1}")
+            fi
+            ;;
+        dedup)
+            # Seamless alias to 'library dedup'
+            SUBCOMMAND="library"
+            SUBACTION="dedup"
+            if [ ${#raw_positionals[@]} -gt 1 ]; then
+                COMMAND_ARGS=("${raw_positionals[@]:1}")
+            fi
+            ;;
+        optimize)
+            # Seamless alias to 'library optimize'
+            SUBCOMMAND="library"
+            SUBACTION="optimize"
+            if [ ${#raw_positionals[@]} -gt 1 ]; then
+                COMMAND_ARGS=("${raw_positionals[@]:1}")
+            fi
+            ;;
+        *)
+            if [[ "$first" =~ ^https?:// ]]; then
+                SUBCOMMAND="download"
+                RAW_URL="$first"
+            else
+                error_dual "Unrecognized command '$first'" "The command does not exist in syncdap" "$first" "" "Run 'syncdap --help' for usage instructions."
+                exit 2
+            fi
+            ;;
+    esac
 }

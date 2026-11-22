@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Module: src/playlists.sh
+# Module: src/sh/playlists.sh
 # Purpose: Playlist mapping and relative UTF-8 M3U8 processing
 # ==============================================================================
 
@@ -18,8 +18,9 @@ process_playlists() {
     fi
 
     if [ "$is_playlist" = true ]; then
-        echo ""
-        echo -e "${CYAN}📋 [2/5] Mapping playlist (.m3u8) and adjusting relative paths...${RESET}"
+        if [ "$QUIET" = false ]; then
+            echo -e "${CYAN}${ICON_PL} [2/5] Mapping playlist (.m3u8) and adjusting relative paths...${RESET}" >&2
+        fi
 
         shopt -s nullglob
         local m3u_files=( *.m3u8 *.m3u )
@@ -53,7 +54,6 @@ try:
         elif s.startswith('#'):
             out.append(s)
         else:
-            # Strip previous relative prefixes if present to resolve cleanly from current music directory
             clean = s
             if clean.startswith('../Music/'):
                 clean = clean[9:]
@@ -70,19 +70,24 @@ try:
     with open(path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(out) + '\n')
 except Exception as e:
-    print(f"   ⚠️ Could not format playlist {path}: {e}", file=sys.stderr)
+    print(f"  ! Could not format playlist {path}: {e}", file=sys.stderr)
 EOF
-                echo -e "   ${GREEN}✅ Playlist mapped:${RESET} $dest"
+                if [ "$QUIET" = false ]; then
+                    echo -e "   ${GREEN}${ICON_OK} Playlist mapped:${RESET} $dest" >&2
+                fi
                 if [ -z "$TARGET_M3U" ]; then
                     TARGET_M3U="$dest"
                 fi
             done
         else
-            echo "   ℹ️ No new M3U8 playlists found in this session."
+            if [ "$QUIET" = false ]; then
+                echo -e "   ${ICON_INFO} No new M3U8 playlists found in this session." >&2
+            fi
         fi
     else
-        echo ""
-        echo "📋 [2/5] Album or single track detected. Skipping playlist generation."
+        if [ "$QUIET" = false ]; then
+            echo -e "${ICON_PL} [2/5] Album or single track detected. Skipping playlist generation." >&2
+        fi
         rm -f *.m3u *.m3u8 2>/dev/null || true
     fi
 }

@@ -4,44 +4,116 @@
 # Purpose: Execution coordinator for media processing submodules
 # ==============================================================================
 
-# --- FALLBACK RESCUE ORCHESTRATION ---
-run_fallback_rescue() {
+# --- DOWNLOAD ORCHESTRATION ---
+orchestrate_download() {
+    local target_url="${RAW_URL:-${COMMAND_ARGS[0]:-}}"
+    if [ -z "$target_url" ]; then
+        error_dual "Missing download target" "A Spotify URL is required for download" "syncdap download <URL>" "" "Example: syncdap download 'https://open.spotify.com/album/...'"
+        exit 2
+    fi
+
+    check_dependencies
+    setup_environment
+
+    validate_url "$target_url"
+    process_download
+}
+
+# --- SEARCH ORCHESTRATION ---
+orchestrate_search() {
+    local query="${COMMAND_ARGS[*]:-}"
+    if [ -z "$query" ]; then
+        error_dual "Missing search query" "A track or album name query is required" "syncdap search <query>" "" "Example: syncdap search 'The Beatles Abbey Road'"
+        exit 2
+    fi
+
+    setup_environment
+
+    if [ "$QUIET" = false ]; then
+        echo -e "${ICON_FIND} Resolving music metadata for: ${BOLD}'$query'${RESET}" >&2
+    fi
+
+    local meta_json
+    meta_json="$(run_py "$SCRIPT_DIR/src/modules/search.py" "$query" --json 2>/dev/null)"
+
+    if [ -z "$meta_json" ] || [ "$meta_json" = "null" ]; then
+        error_dual "Metadata resolution failed" "No matching tracks or albums found on iTunes/MusicBrainz" "$query" "" "Try a more specific search query: syncdap search '<artist> <title>'"
+        exit 1
+    fi
+
+    if [ "$OUTPUT_FORMAT" = "json" ]; then
+        echo "$meta_json"
+        return 0
+    fi
+
+    local meta_file="$TEMP_DIR/search_resolved.json"
+    echo "$meta_json" > "$meta_file"
+
+    if [ "$QUIET" = false ]; then
+        echo -e "${ICON_DL} Downloading resolved track..." >&2
+    fi
+
+    run_py "$SCRIPT_DIR/src/modules/fallback.py" \
+        "$meta_file" \
+        "$TEMP_DIR" \
+        "" \
+        "$THREADS" \
+        "$SYNCED_ONLY" \
+        "$AUDIO_FORMAT" \
+        "${YTDLP_JS_ARGS[*]:-}"
+}
+
+# --- RESCUE ORCHESTRATION ---
+orchestrate_rescue() {
+    setup_environment
+    local target="${COMMAND_ARGS[0]:-}"
     local batch_meta="$TEMP_DIR/batch_meta.spotdl"
     local has_targets=false
 
-    if [ "$FALLBACK_ONLY" = true ] && [ -n "$CLEAN_URL" ]; then
-        echo ""
-        echo -e "${CYAN}⚡ Fallback mode: Fetching Spotify metadata...${RESET}"
-        run_spotdl save "$CLEAN_URL" --save-file "$batch_meta" >/dev/null 2>&1 || true
+    if [ -n "$target" ] && [[ "$target" =~ ^https://open\.spotify\.com/ ]]; then
+        if [ "$QUIET" = false ]; then
+            echo -e "${ICON_DL} Fetching stream metadata for rescue target..." >&2
+        fi
+        run_spotdl save "$target" --save-file "$batch_meta" >/dev/null 2>&1 || true
         [ -s "$batch_meta" ] && has_targets=true
     elif [ -s "erros.spotdl" ]; then
-        echo ""
-        echo -e "${YELLOW}⚠️ [3/5] Starting smart parallel fallback for failed tracks...${RESET}"
         mapfile -t failed_urls < <(grep -oE 'https://open\.spotify\.com/track/[a-zA-Z0-9]+' erros.spotdl | sort -u)
         if [ ${#failed_urls[@]} -gt 0 ]; then
-            echo "   Found ${#failed_urls[@]} track(s) for recovery."
-            echo "   Fetching official metadata from Spotify..."
+            if [ "$QUIET" = false ]; then
+                echo -e "${ICON_INFO} Rescuing ${#failed_urls[@]} track(s) from erros.spotdl..." >&2
+            fi
             run_spotdl save "${failed_urls[@]}" --save-file "$batch_meta" >/dev/null 2>&1 || true
             [ -s "$batch_meta" ] && has_targets=true
         fi
+    elif [ -n "$target" ] && [ -f "$target" ]; then
+        batch_meta="$target"
+        has_targets=true
     fi
 
     if [ "$has_targets" = true ]; then
         run_py "$SCRIPT_DIR/src/modules/fallback.py" \
             "$batch_meta" \
             "$TEMP_DIR" \
-            "$TARGET_M3U" \
+            "" \
             "$THREADS" \
             "$SYNCED_ONLY" \
-            "$AUDIO_EXT" \
+            "$AUDIO_FORMAT" \
             "${YTDLP_JS_ARGS[*]:-}"
         rm -f erros.spotdl
     else
-        if [ "$FALLBACK_ONLY" = false ]; then
-            echo ""
-            echo -e "${GREEN}✅ [3/5] No failed tracks registered by spotDL.${RESET}"
-        fi
+        echo -e "${ICON_OK} No pending failed tracks to rescue."
     fi
+}
+
+# --- STATUS & ANALYTICS ORCHESTRATION ---
+orchestrate_status() {
+    local target_dir
+    target_dir="$(resolve_music_root)"
+    local extra_args=()
+    [ "$OUTPUT_FORMAT" = "json" ] && extra_args+=(--json)
+    [ "$OUTPUT_FORMAT" = "plain" ] && extra_args+=(--plain)
+
+    run_py "$SCRIPT_DIR/src/modules/stats.py" -r "$target_dir" "${extra_args[@]}"
 }
 
 # --- DEDUPLICATION ORCHESTRATION ---
@@ -52,150 +124,237 @@ orchestrate_dedup() {
     [ "$DRY_RUN" = true ] && dry_flag="--dry-run"
 
     run_py "$SCRIPT_DIR/src/modules/dedup.py" -r "$target_dir" $dry_flag
+    cleanup_empty_dirs
 }
 
-# --- ROCKBOX METADATA ORCHESTRATION ---
-orchestrate_rockbox_tags() {
-    local target_dir
-    target_dir="$(resolve_music_root)"
+# --- PATCH ORCHESTRATION ---
+orchestrate_patch() {
+    setup_environment
+    local patch_fmt="${COMMAND_ARGS[0]:-${AUDIO_FORMAT:-flac}}"
+    local patch_target="${COMMAND_ARGS[1]:-}"
+
+    validate_format "$patch_fmt"
     local dry_flag=""
-    [ "$DRY_RUN" = true ] && dry_flag="--dry-run"
+    [ "$DRY_RUN" = true ] && dry_flag="true" || dry_flag="false"
+    local keep_flag=""
+    [ "$KEEP_OLD" = true ] && keep_flag="true" || keep_flag="false"
+    local yes_flag=""
+    [ "$ASSUME_YES" = true ] && yes_flag="true" || yes_flag="false"
 
-    run_py "$SCRIPT_DIR/src/modules/rockbox_tags.py" -r "$target_dir" $dry_flag
+    if [ "$QUIET" = false ]; then
+        echo -e "${ICON_DISC} Upgrading audio format to ${BOLD}${patch_fmt^^}${RESET}..." >&2
+    fi
+
+    run_py "$SCRIPT_DIR/src/patch/cli.py" \
+        "$patch_fmt" \
+        "$TEMP_DIR" \
+        "$THREADS" \
+        "$keep_flag" \
+        "$dry_flag" \
+        "$patch_target" \
+        "${YTDLP_JS_ARGS[*]:-}" \
+        "$yes_flag"
+
+    cleanup_empty_dirs
+    echo -e "${GREEN}${ICON_OK} Audio format patch completed successfully.${RESET}"
 }
 
-# --- LIBRARY STATUS & ANALYTICS ORCHESTRATION ---
-orchestrate_status() {
-    local target_dir
-    target_dir="$(resolve_music_root)"
-    run_py "$SCRIPT_DIR/src/modules/stats.py" -r "$target_dir"
+# --- LIBRARY ORCHESTRATION ---
+orchestrate_library() {
+    local action="${1:-${SUBACTION:-}}"
+    case "$action" in
+        dedup)
+            orchestrate_dedup
+            ;;
+        optimize)
+            orchestrate_optimize
+            ;;
+        *)
+            error_dual "Invalid library action" "Supported actions: dedup, optimize" "syncdap library $action" "" "Run 'syncdap library --help'"
+            exit 2
+            ;;
+    esac
 }
 
-# --- PLAYLIST AUDIT & REPAIR ORCHESTRATION ---
-orchestrate_playlist_repair() {
-    local target_dir
-    target_dir="$(resolve_music_root)"
-    local dry_flag=""
-    [ "$DRY_RUN" = true ] && dry_flag="--dry-run"
+orchestrate_optimize() {
+    if [ "$QUIET" = false ]; then
+        echo -e "${ICON_DISC} Running complete Rockbox library optimization pipeline..." >&2
+    fi
 
-    run_py "$SCRIPT_DIR/src/modules/playlist_repair.py" -r "$target_dir" $dry_flag
+    orchestrate_dedup
+    orchestrate_covers "optimize"
+    orchestrate_tags "fix"
+    orchestrate_playlist "repair"
+    cleanup_empty_dirs
+
+    echo -e "${GREEN}${ICON_OK} Library optimization pipeline completed.${RESET}"
 }
 
-# --- COVER ART ORCHESTRATION ---
-orchestrate_covers() {
-    local mode="${1:-embed}"    # 'embed' or 'optimize'
-    local scope="${2:-session}" # 'all' or 'session'
-    local dirs_file="$TEMP_DIR/cover_dirs.txt"
+# --- ALBUM HIERARCHY ORCHESTRATION (expand | audit) ---
+orchestrate_album() {
+    local action="${1:-${SUBACTION:-}}"
+    local target="${2:-${COMMAND_ARGS[0]:-}}"
     local music_root
     music_root="$(resolve_music_root)"
 
-    echo ""
-    if [ "$scope" = "all" ]; then
-        find "$music_root" -type f \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" -o -name "*.ogg" -o -name "*.opus" \) ! -path "*/Playlists/*" -exec dirname {} + 2>/dev/null | sort -u > "$dirs_file"
-    else
-        find "$music_root" -type f \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" -o -name "*.ogg" -o -name "*.opus" \) ! -path "*/Playlists/*" -newer "$MARKER" -exec dirname {} + 2>/dev/null | sort -u > "$dirs_file"
-    fi
+    case "$action" in
+        expand)
+            local expand_args=("-r" "$music_root" "-t" "$THREADS")
+            [ "$DRY_RUN" = true ] && expand_args+=(--dry-run)
+            [ "$ASSUME_YES" = true ] && expand_args+=(--yes)
+            [ -n "$AUDIO_FORMAT" ] && expand_args+=("-F" "$AUDIO_FORMAT")
+            [ "$SYNCED_ONLY" = true ] && expand_args+=(--synced-only)
 
-    run_py "$SCRIPT_DIR/src/modules/covers.py" "$mode" "$dirs_file" "$THREADS"
+            if [ -n "$target" ]; then
+                if [ ! -f "$target" ]; then
+                    error_dual "Target file not found" "The specified audio file does not exist on disk" "$target" "" "Pass a valid file path: syncdap album expand '/path/to/rip.mp3'"
+                    exit 1
+                fi
+                expand_args+=("$target")
+            fi
+
+            run_py "$SCRIPT_DIR/src/modules/album_expander.py" "${expand_args[@]}"
+            ;;
+        audit)
+            local audit_args=("-r" "$music_root")
+            [ "$OUTPUT_FORMAT" = "json" ] && audit_args+=(--json)
+            run_py "$SCRIPT_DIR/src/modules/audit.py" "${audit_args[@]}"
+            ;;
+        *)
+            error_dual "Invalid album action '$action'" "Available album actions are 'expand' and 'audit'" "syncdap album $action" "" "Usage: syncdap album <expand [file] | audit>"
+            exit 2
+            ;;
+    esac
 }
 
-# --- GENRE ENRICHMENT ORCHESTRATION ---
-orchestrate_genres() {
-    local scope="${1:-session}" # 'all' or 'session'
-    local dirs_file="$TEMP_DIR/genre_dirs.txt"
+# --- COVERS HIERARCHY ORCHESTRATION (optimize | embed) ---
+orchestrate_covers() {
+    setup_environment
+    local action="${1:-${SUBACTION:-}}"
+    local target_scope="${2:-all}"
+    local music_root
+    music_root="$(resolve_music_root)"
+    local dirs_file="$TEMP_DIR/cover_dirs.txt"
 
-    echo ""
-    if [ "$scope" = "all" ]; then
-        echo -e "${MAGENTA}🏷️ Enriching genre metadata across the entire library (album-by-album)...${RESET}"
-        find . -mindepth 2 -maxdepth 2 -type d ! -path "./Playlists*" | sort > "$dirs_file"
-    else
-        echo -e "${MAGENTA}🏷️ [5/5] Checking and enriching genre metadata for downloaded albums...${RESET}"
-        find . -mindepth 2 -maxdepth 2 -type d ! -path "./Playlists*" -newer "$MARKER" | sort > "$dirs_file"
-    fi
-
-    run_py "$SCRIPT_DIR/src/modules/genres.py" "$dirs_file" "$THREADS"
+    case "$action" in
+        optimize|strip)
+            find "$music_root" -type f \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" -o -name "*.ogg" -o -name "*.opus" \) ! -path "*/Playlists/*" -exec dirname {} + 2>/dev/null | sort -u > "$dirs_file"
+            run_py "$SCRIPT_DIR/src/modules/covers.py" "optimize" "$dirs_file" "$THREADS"
+            ;;
+        embed)
+            find "$music_root" -type f \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" -o -name "*.ogg" -o -name "*.opus" \) ! -path "*/Playlists/*" -exec dirname {} + 2>/dev/null | sort -u > "$dirs_file"
+            run_py "$SCRIPT_DIR/src/modules/covers.py" "embed" "$dirs_file" "$THREADS"
+            ;;
+        *)
+            error_dual "Invalid covers action '$action'" "Available covers actions are 'optimize' and 'embed'" "syncdap covers $action" "" "Usage: syncdap covers <optimize | embed>"
+            exit 2
+            ;;
+    esac
 }
 
-# --- LYRICS SCANNER ORCHESTRATION ---
+# --- LYRICS HIERARCHY ORCHESTRATION (fetch | embed) ---
 orchestrate_lyrics() {
-    local scope="${1:-session}" # 'all' or 'session'
+    setup_environment
+    local action="${1:-${SUBACTION:-}}"
+    local music_root
+    music_root="$(resolve_music_root)"
     local dirs_file="$TEMP_DIR/lyrics_dirs.txt"
 
-    echo ""
-    echo -e "${CYAN}🎵 Scanning for tracks with missing .lrc lyrics...${RESET}"
-    if [ "$scope" = "all" ]; then
-        find . -mindepth 2 -maxdepth 2 -type d ! -path "./Playlists*" | sort > "$dirs_file"
-    else
-        find . -mindepth 2 -maxdepth 2 -type d ! -path "./Playlists*" -newer "$MARKER" | sort > "$dirs_file"
-    fi
-
-    run_py "$SCRIPT_DIR/src/modules/lyrics.py" "$dirs_file" "$THREADS" "$SYNCED_ONLY"
-}
-
-# --- METADATA LYRICS EMBEDDING ORCHESTRATION ---
-orchestrate_embed_lyrics() {
-    local music_root
-    music_root="$(resolve_music_root)"
-    local dirs_file="$TEMP_DIR/embed_lyrics_dirs.txt"
-
-    echo ""
-    echo -e "${CYAN}📝 Scanning and embedding lyrics directly into audio metadata...${RESET}"
     find "$music_root" -mindepth 1 -type d ! -path "*/Playlists*" 2>/dev/null | sort > "$dirs_file"
 
-    run_py "$SCRIPT_DIR/src/modules/lyrics.py" "$dirs_file" "$THREADS" "$SYNCED_ONLY" --embed
+    case "$action" in
+        fetch|scan)
+            run_py "$SCRIPT_DIR/src/modules/lyrics.py" "$dirs_file" "$THREADS" "$SYNCED_ONLY"
+            ;;
+        embed)
+            run_py "$SCRIPT_DIR/src/modules/lyrics.py" "$dirs_file" "$THREADS" "$SYNCED_ONLY" --embed
+            ;;
+        *)
+            error_dual "Invalid lyrics action '$action'" "Available lyrics actions are 'fetch' and 'embed'" "syncdap lyrics $action" "" "Usage: syncdap lyrics <fetch | embed>"
+            exit 2
+            ;;
+    esac
 }
 
-# --- ALBUM EXPANDER ORCHESTRATION ---
-orchestrate_expand_albums() {
+# --- PLAYLIST HIERARCHY ORCHESTRATION (manage | merge | delete | repair) ---
+orchestrate_playlist() {
+    local action="${1:-${SUBACTION:-}}"
     local music_root
     music_root="$(resolve_music_root)"
-    local target_file="${EXPAND_TARGET:-$SPLIT_FILE}"
 
-    local expand_args=("-r" "$music_root" "-t" "$THREADS")
-    [ "$DRY_RUN" = true ] && expand_args+=(--dry-run)
-    [ "$ASSUME_YES" = true ] && expand_args+=(--yes)
-    [ -n "$AUDIO_FORMAT" ] && expand_args+=("-F" "$AUDIO_FORMAT")
-    [ "$SYNCED_ONLY" = true ] && expand_args+=(--synced-only)
-
-    if [ -n "$target_file" ]; then
-        if [ ! -f "$target_file" ]; then
-            echo -e "${RED}❌ Error: Specified file does not exist: $target_file${RESET}" >&2
-            exit 1
-        fi
-        expand_args+=("$target_file")
-    fi
-
-    run_py "$SCRIPT_DIR/src/modules/album_expander.py" "${expand_args[@]}"
+    case "$action" in
+        manage)
+            local pl_target="${COMMAND_ARGS[0]:-}"
+            local pl_args=(--menu)
+            [ -n "$pl_target" ] && pl_args=(--name "$pl_target")
+            run_py "$SCRIPT_DIR/src/playlists/cli.py" "${pl_args[@]}"
+            ;;
+        merge)
+            if [ ${#COMMAND_ARGS[@]} -lt 2 ]; then
+                error_dual "Missing playlist merge targets" "Two source playlists are required" "syncdap playlist merge <p1> <p2> [out]" "" "Example: syncdap playlist merge Favorites.m3u8 Rock.m3u8 Merged.m3u8"
+                exit 2
+            fi
+            local p1="${COMMAND_ARGS[0]}"
+            local p2="${COMMAND_ARGS[1]}"
+            local out="${COMMAND_ARGS[2]:-}"
+            local yes_flag=""
+            [ "$ASSUME_YES" = true ] && yes_flag="--yes"
+            run_py "$SCRIPT_DIR/src/playlists/cli.py" --merge "$p1" "$p2" ${out:+"$out"} $yes_flag
+            ;;
+        delete)
+            local del_target="${COMMAND_ARGS[0]:-}"
+            if [ -z "$del_target" ]; then
+                error_dual "Missing playlist to delete" "A playlist name or file path is required" "syncdap playlist delete <name>" "" "Example: syncdap playlist delete OldParty.m3u8"
+                exit 2
+            fi
+            local yes_flag=""
+            [ "$ASSUME_YES" = true ] && yes_flag="--yes"
+            run_py "$SCRIPT_DIR/src/playlists/cli.py" --delete "$del_target" $yes_flag
+            ;;
+        repair)
+            local dry_flag=""
+            [ "$DRY_RUN" = true ] && dry_flag="--dry-run"
+            run_py "$SCRIPT_DIR/src/modules/playlist_repair.py" -r "$music_root" $dry_flag
+            ;;
+        *)
+            error_dual "Invalid playlist action '$action'" "Available playlist actions are 'manage', 'merge', 'delete', 'repair'" "syncdap playlist $action" "" "Usage: syncdap playlist <manage [name] | merge <p1> <p2> [out] | delete <name> | repair>"
+            exit 2
+            ;;
+    esac
 }
 
-orchestrate_split() {
-    orchestrate_expand_albums
-}
-
-# --- DURATION ANOMALY AUDITOR ORCHESTRATION ---
-orchestrate_audit_duration() {
+# --- TAGS HIERARCHY ORCHESTRATION (fix | genres | romaji) ---
+orchestrate_tags() {
+    setup_environment
+    local action="${1:-${SUBACTION:-}}"
     local music_root
     music_root="$(resolve_music_root)"
-    run_py "$SCRIPT_DIR/src/modules/audit.py" -r "$music_root" --auto-expand
-}
 
-# --- NAME SEARCH & RESOLUTION ORCHESTRATION ---
-orchestrate_search_download() {
-    local query="$SEARCH_QUERY"
-    echo ""
-    echo -e "${BOLD}${BLUE}🔍 Resolving music metadata for:${RESET} ${CYAN}'$query'${RESET}"
-
-    local meta_json
-    meta_json="$(run_py "$SCRIPT_DIR/src/modules/search.py" "$query" --json 2>/dev/null)"
-
-    if [ -z "$meta_json" ] || [ "$meta_json" = "null" ]; then
-        echo -e "${RED}❌ Error: Could not resolve metadata for '$query'.${RESET}" >&2
-        exit 1
-    fi
-
-    local meta_file="$TEMP_DIR/search_resolved.json"
-    echo "$meta_json" > "$meta_file"
-
-    echo -e "${GREEN}✅ Resolved metadata. Starting high-precision download...${RESET}"
-    orchestrate_fallback "$meta_file"
+    case "$action" in
+        fix)
+            local dry_flag=""
+            [ "$DRY_RUN" = true ] && dry_flag="--dry-run"
+            run_py "$SCRIPT_DIR/src/modules/rockbox_tags.py" -r "$music_root" $dry_flag
+            ;;
+        genres)
+            local dirs_file="$TEMP_DIR/genre_dirs.txt"
+            find "$music_root" -mindepth 1 -type d ! -path "*/Playlists*" 2>/dev/null | sort > "$dirs_file"
+            run_py "$SCRIPT_DIR/src/modules/genres.py" "$dirs_file" "$THREADS"
+            ;;
+        romaji)
+            local romaji_target="${COMMAND_ARGS[0]:-}"
+            local romaji_args=("-r" "$music_root" "-t" "$THREADS")
+            [ "$DRY_RUN" = true ] && romaji_args+=("-n")
+            if [ -n "$romaji_target" ]; then
+                romaji_args+=("-p" "$romaji_target")
+            else
+                romaji_args+=("-a")
+            fi
+            run_py "$SCRIPT_DIR/src/romaji/cli.py" "${romaji_args[@]}"
+            ;;
+        *)
+            error_dual "Invalid tags action '$action'" "Available tags actions are 'fix', 'genres', 'romaji'" "syncdap tags $action" "" "Usage: syncdap tags <fix | genres | romaji [target]>"
+            exit 2
+            ;;
+    esac
 }

@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/patch/metadata.py
-# Purpose: Metadata extraction and tag transference for audio format upgrades
-# ==============================================================================
+"""Audio metadata preservation across transcode formats."""
 
 import os
 from share import read_audio_metadata, write_audio_metadata

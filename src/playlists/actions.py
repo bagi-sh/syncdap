@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/playlists/actions.py
-# Purpose: Playlist deletion and merging workflows
-# ==============================================================================
+"""Playlist management actions (merge, delete, deduplicate)."""
 
 import os
 from share import parse_playlist_file
@@ -21,10 +18,10 @@ def delete_playlist_flow(pl_query, assume_yes=False):
     """
     pl_path = find_playlist_file(pl_query)
     if not pl_path:
-        print(f"❌ Error: Playlist '{pl_query}' not found.")
+        print(f"[ERR] Error: Playlist '{pl_query}' not found.")
         return 1
 
-    print(f"\n📋 Analyzing playlist: {pl_path}...")
+    print(f"\n[PL] Analyzing playlist: {pl_path}...")
     raw_lines, tracks = analyze_playlist(pl_path)
 
     existing_tracks = [t for t in tracks if t['exists']]
@@ -35,10 +32,10 @@ def delete_playlist_flow(pl_query, assume_yes=False):
             total_bytes += os.path.getsize(t['lrc'])
 
     mb_size = total_bytes / (1024 * 1024)
-    print(f"   🎵 Total entries: {len(tracks)} ({len(existing_tracks)} found on disk)")
-    print(f"   💾 Disk space to free: ~{mb_size:.2f} MB")
+    print(f"   [TRK] Total entries: {len(tracks)} ({len(existing_tracks)} found on disk)")
+    print(f"   [SAVE] Disk space to free: ~{mb_size:.2f} MB")
     if shared_tracks:
-        print(f"   ⚠️ Shared tracks with other playlists: {len(shared_tracks)}")
+        print(f"   [WARN] Shared tracks with other playlists: {len(shared_tracks)}")
         for st in shared_tracks[:3]:
             print(f"      - {os.path.basename(st['path'])} (shared with: {', '.join(st['shared_with'])})")
         if len(shared_tracks) > 3:
@@ -48,7 +45,7 @@ def delete_playlist_flow(pl_query, assume_yes=False):
         print("\n" + "=" * 65)
         resp = input(f"Are you sure you want to delete playlist '{os.path.basename(pl_path)}' and its audio files? [y/N]: ").strip().lower()
         if resp not in ('y', 'yes'):
-            print("🛑 Operation canceled by user.")
+            print("[STOP] Operation canceled by user.")
             return 0
 
     album_decisions = {}
@@ -73,14 +70,14 @@ def delete_playlist_flow(pl_query, assume_yes=False):
         elif album_dir in album_decisions:
             should_delete = album_decisions[album_dir]
         else:
-            shared_note = f" ⚠️ [Shared with: {', '.join(t['shared_with'])}]" if t['shared_with'] else ""
-            print(f"\n[{idx + 1}/{len(existing_tracks)}] 🗑️ Track: {fname}{shared_note}")
+            shared_note = f" [WARN] [Shared with: {', '.join(t['shared_with'])}]" if t['shared_with'] else ""
+            print(f"\n[{idx + 1}/{len(existing_tracks)}] [DEL] Track: {fname}{shared_note}")
             print(f"   Folder: {album_dir}")
             print("   Options: [y] Yes | [n] No | [a] Entire album | [r] Entire artist | [t] All remaining | [c] Cancel")
             ans = input("   Decision: ").strip().lower()
 
             if ans in ('c', 'cancel'):
-                print("🛑 Operation aborted by user.")
+                print("[STOP] Operation aborted by user.")
                 break
             elif ans in ('t', 'all'):
                 all_yes = True
@@ -103,15 +100,15 @@ def delete_playlist_flow(pl_query, assume_yes=False):
                 if t['lrc'] and os.path.isfile(t['lrc']):
                     os.remove(t['lrc'])
             except Exception as e:
-                print(f"   ❌ Error deleting {track_path}: {e}")
+                print(f"   [ERR] Error deleting {track_path}: {e}")
         else:
             kept_count += 1
 
     try:
         os.remove(pl_path)
-        print(f"\n🗑️ Playlist file '{os.path.basename(pl_path)}' removed.")
+        print(f"\n[DEL] Playlist file '{os.path.basename(pl_path)}' removed.")
     except Exception as e:
-        print(f"\n⚠️ Could not remove playlist file {pl_path}: {e}")
+        print(f"\n[WARN] Could not remove playlist file {pl_path}: {e}")
 
     cleaned_dirs = 0
     for root, dirs, files in os.walk('.', topdown=False):
@@ -122,9 +119,9 @@ def delete_playlist_flow(pl_query, assume_yes=False):
             except Exception:
                 pass
 
-    print(f"\n✅ Completed: {deleted_count} track(s) deleted, {kept_count} track(s) kept.")
+    print(f"\n[OK] Completed: {deleted_count} track(s) deleted, {kept_count} track(s) kept.")
     if cleaned_dirs > 0:
-        print(f"🧹 Cleaned up {cleaned_dirs} empty folder(s).")
+        print(f"[CLEAN] Cleaned up {cleaned_dirs} empty folder(s).")
 
     return 0
 
@@ -135,19 +132,19 @@ def merge_playlists_flow(pl1_query, pl2_query, out_name=None, delete_sources=Fal
     pl2_path = find_playlist_file(pl2_query)
 
     if not pl1_path:
-        print(f"❌ Error: Source playlist 1 '{pl1_query}' not found.")
+        print(f"[ERR] Error: Source playlist 1 '{pl1_query}' not found.")
         return 1
     if not pl2_path:
-        print(f"❌ Error: Source playlist 2 '{pl2_query}' not found.")
+        print(f"[ERR] Error: Source playlist 2 '{pl2_query}' not found.")
         return 1
 
     if os.path.abspath(pl1_path) == os.path.abspath(pl2_path):
-        print("❌ Error: Cannot merge a playlist with itself. Please specify two distinct playlists.")
+        print("[ERR] Error: Cannot merge a playlist with itself. Please specify two distinct playlists.")
         return 1
 
     pl_dir = os.path.dirname(os.path.abspath(pl1_path))
 
-    print(f"\n🔗 Merging playlists:")
+    print(f"\n[LINK] Merging playlists:")
     print(f"   [1] {os.path.basename(pl1_path)}")
     print(f"   [2] {os.path.basename(pl2_path)}")
 
@@ -208,9 +205,9 @@ def merge_playlists_flow(pl1_query, pl2_query, out_name=None, delete_sources=Fal
     with open(dest_pl_path, 'w', encoding='utf-8') as f:
         f.writelines(out_lines)
 
-    print(f"\n✅ Merged playlist saved successfully!")
-    print(f"   📍 File: {dest_pl_path}")
-    print(f"   🎶 Total tracks: {len(merged_entries)} ({len(entries_1)} from PL1, {len(entries_2)} from PL2)")
+    print(f"\n[OK] Merged playlist saved successfully!")
+    print(f"   [LOC] File: {dest_pl_path}")
+    print(f"   [TRK] Total tracks: {len(merged_entries)} ({len(entries_1)} from PL1, {len(entries_2)} from PL2)")
 
     should_del_sources = delete_sources
     if not delete_sources and not assume_yes:
@@ -222,13 +219,13 @@ def merge_playlists_flow(pl1_query, pl2_query, out_name=None, delete_sources=Fal
         try:
             if os.path.isfile(pl1_path) and os.path.abspath(pl1_path) != os.path.abspath(dest_pl_path):
                 os.remove(pl1_path)
-                print(f"   🗑️ Removed source playlist: {os.path.basename(pl1_path)}")
+                print(f"   [DEL] Removed source playlist: {os.path.basename(pl1_path)}")
             if os.path.isfile(pl2_path) and os.path.abspath(pl2_path) != os.path.abspath(dest_pl_path):
                 os.remove(pl2_path)
-                print(f"   🗑️ Removed source playlist: {os.path.basename(pl2_path)}")
+                print(f"   [DEL] Removed source playlist: {os.path.basename(pl2_path)}")
         except Exception as e:
-            print(f"   ⚠️ Could not delete source playlist files: {e}")
+            print(f"   [WARN] Could not delete source playlist files: {e}")
     else:
-        print("   ℹ️ Source playlists kept intact.")
+        print("   [INFO] Source playlists kept intact.")
 
     return 0

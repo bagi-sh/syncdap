@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/romaji/playlist.py
-# Purpose: Playlist track discovery and path transliteration
-# ==============================================================================
+"""Playlist relinking for Romaji renamed tracks."""
 
 from pathlib import Path
 

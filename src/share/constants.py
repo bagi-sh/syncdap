@@ -1,9 +1,5 @@
-# ==============================================================================
-# Module: src/share/constants.py
-# Purpose: Shared system constants, audio formats, and ignored directory names
-# ==============================================================================
+"""Shared constants, supported audio formats, and ignored directories."""
 
-# Supported audio extensions across all modules
 AUDIO_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav')
 
 LOSSLESS_EXTENSIONS = ('.flac', '.wav', '.aiff', '.ape', '.alac')

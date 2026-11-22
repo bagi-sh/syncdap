@@ -1,4 +1,2 @@
-# ==============================================================================
-# Package: src/modules
-# Purpose: Specialized music collection management and optimization modules
-# ==============================================================================
+"""Core media processing and maintenance modules package."""
+

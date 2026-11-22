@@ -1,8 +1,4 @@
-# ==============================================================================
-# Module: src/share/covers.py
-# Purpose: Shared cover art discovery, inspection, embedding, and stripping
-#          for MP3, FLAC, M4A, OGG, and Opus formats.
-# ==============================================================================
+"""Shared cover artwork detection and frame extraction utilities."""
 
 import os
 import base64

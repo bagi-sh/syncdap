@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/share/text.py
-# Purpose: Shared string normalization, sanitization, and filename metadata parsing
-# ==============================================================================
+"""Shared filename parsing and string sanitization for FAT32."""
 
 import os
 import re

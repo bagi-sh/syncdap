@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/playlists/manager.py
-# Purpose: Interactive playlist manager menu
-# ==============================================================================
+"""Interactive terminal playlist manager UI."""
 
 import os
 from .core import (
@@ -18,7 +15,7 @@ from .actions import merge_playlists_flow, delete_playlist_flow
 
 def interactive_playlist_manager():
     """Interactive CLI menu for managing playlists (create, edit, merge, delete)."""
-    print("🎵 Interactive M3U8 Playlist Manager")
+    print("[TRK] Interactive M3U8 Playlist Manager")
     print("------------------------------------------")
 
     actions = [
@@ -30,7 +27,7 @@ def interactive_playlist_manager():
 
     action = select_with_fzf(actions, prompt="Action > ", header="[ Choose an action ]")
     if not action:
-        print("⚠️ No action selected. Operation canceled.")
+        print("[WARN] No action selected. Operation canceled.")
         return 0
 
     pl_dir = get_default_playlist_dir()
@@ -38,14 +35,14 @@ def interactive_playlist_manager():
     if action.startswith("1"):
         pl_name = input("Enter new playlist name (e.g. My Favorites): ").strip()
         if not pl_name:
-            print("❌ Invalid playlist name.")
+            print("[ERR] Invalid playlist name.")
             return 1
         if not pl_name.lower().endswith(('.m3u8', '.m3u')):
             pl_name += '.m3u8'
 
         dest_path = os.path.join(pl_dir, pl_name)
 
-        print("\n🔍 Scanning library for audio files...")
+        print("\n[FIND] Scanning library for audio files...")
         all_tracks = []
         for root, dirs, files in os.walk('.'):
             if root.startswith('./Playlists') or root == './Playlists':
@@ -56,7 +53,7 @@ def interactive_playlist_manager():
         all_tracks.sort()
 
         if not all_tracks:
-            print("❌ No audio files found in current directory.")
+            print("[ERR] No audio files found in current directory.")
             return 1
 
         selected = select_with_fzf(
@@ -67,7 +64,7 @@ def interactive_playlist_manager():
         )
 
         if not selected:
-            print("⚠️ No tracks selected. Playlist creation canceled.")
+            print("[WARN] No tracks selected. Playlist creation canceled.")
             return 0
 
         out_lines = ['#EXTM3U\n']
@@ -77,21 +74,21 @@ def interactive_playlist_manager():
         with open(dest_path, 'w', encoding='utf-8') as fp:
             fp.writelines(out_lines)
 
-        print(f"\n✅ Playlist created successfully!")
-        print(f"   📍 File: {dest_path}")
-        print(f"   🎶 Total tracks: {len(selected)}")
+        print(f"\n[OK] Playlist created successfully!")
+        print(f"   [LOC] File: {dest_path}")
+        print(f"   [TRK] Total tracks: {len(selected)}")
         return 0
 
     elif action.startswith("2"):
         all_pls = get_all_playlist_files()
         if not all_pls:
-            print(f"❌ No playlist files found in '{pl_dir}'.")
+            print(f"[ERR] No playlist files found in '{pl_dir}'.")
             return 1
 
         pl_names = [os.path.basename(p) for p in all_pls]
         selected_pl_name = select_with_fzf(pl_names, prompt="Playlist > ", header="[ Select playlist to edit ]")
         if not selected_pl_name:
-            print("⚠️ No playlist selected. Operation canceled.")
+            print("[WARN] No playlist selected. Operation canceled.")
             return 0
 
         selected_pl = find_playlist_file(selected_pl_name)
@@ -130,15 +127,15 @@ def interactive_playlist_manager():
         with open(selected_pl, 'w', encoding='utf-8') as fp:
             fp.writelines(out_lines)
 
-        print(f"\n✅ Playlist updated successfully!")
-        print(f"   📍 File: {selected_pl}")
-        print(f"   🎶 Total tracks: {len(combined)}")
+        print(f"\n[OK] Playlist updated successfully!")
+        print(f"   [LOC] File: {selected_pl}")
+        print(f"   [TRK] Total tracks: {len(combined)}")
         return 0
 
     elif action.startswith("3"):
         all_pls = get_all_playlist_files()
         if len(all_pls) < 2:
-            print(f"❌ Need at least 2 playlists to merge. Found {len(all_pls)}.")
+            print(f"[ERR] Need at least 2 playlists to merge. Found {len(all_pls)}.")
             return 1
 
         pl_names = [os.path.basename(p) for p in all_pls]
@@ -156,7 +153,7 @@ def interactive_playlist_manager():
     elif action.startswith("4"):
         all_pls = get_all_playlist_files()
         if not all_pls:
-            print("❌ No playlists found.")
+            print("[ERR] No playlists found.")
             return 1
         pl_names = [os.path.basename(p) for p in all_pls]
         chosen = select_with_fzf(pl_names, prompt="Delete Playlist > ", header="[ Select playlist to delete ]")

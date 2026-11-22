@@ -1,7 +1,4 @@
-# ==============================================================================
-# Package: src/romaji
-# Purpose: Japanese music metadata and FAT32 path transliteration
-# ==============================================================================
+"""Japanese Romaji transliteration package."""
 
 from .translit import (
     to_romaji,

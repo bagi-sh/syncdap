@@ -1,8 +1,4 @@
-# ==============================================================================
-# Module: src/share/playlists.py
-# Purpose: Shared playlist discovery, track resolution, parsing, and atomic patching
-#          (supporting both 1-to-1 and 1-to-N track replacements).
-# ==============================================================================
+"""Shared playlist entry parsing and path resolution utilities."""
 
 import os
 from .constants import AUDIO_EXTENSIONS

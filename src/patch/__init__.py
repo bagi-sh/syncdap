@@ -1,7 +1,4 @@
-# ==============================================================================
-# Package: src/patch
-# Purpose: Audio format upgrade, metadata preservation, and playlist re-linking
-# ==============================================================================
+"""Audio format patching and transcoding package."""
 
 from .metadata import extract_metadata_from_file, transfer_tags_to_file
 from .playlist import update_playlists, handle_playlist_patch

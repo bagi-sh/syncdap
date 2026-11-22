@@ -1,8 +1,4 @@
-# ==============================================================================
-# Module: src/share/api.py
-# Purpose: Shared API clients for iTunes and MusicBrainz metadata queries
-#          Used by: modules/album_expander.py, modules/audit.py, modules/search.py
-# ==============================================================================
+"""Rate-limited HTTP client helper for metadata API lookups."""
 
 import json
 import re

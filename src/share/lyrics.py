@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/share/lyrics.py
-# Purpose: Shared LRCLIB and syncedlyrics query engine
-# ==============================================================================
+"""Shared lyrics format detection and normalization helpers."""
 
 import json
 import os

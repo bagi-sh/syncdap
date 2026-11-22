@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/romaji/tags.py
-# Purpose: Audio metadata tag transliteration for ID3, Vorbis, and MP4
-# ==============================================================================
+"""Audio metadata tag transliteration to Hepburn Romaji."""
 
 import threading
 from pathlib import Path

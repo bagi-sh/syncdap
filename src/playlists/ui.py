@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/playlists/ui.py
-# Purpose: Terminal UI and fzf selector integration
-# ==============================================================================
+"""Terminal text styling and table formatting for playlists."""
 
 import shutil
 import subprocess

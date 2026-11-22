@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/playlists/core.py
-# Purpose: Playlist analysis and track relationship mapping
-# ==============================================================================
+"""Core playlist parsing, loading, and serialization utilities."""
 
 import os
 from share import (

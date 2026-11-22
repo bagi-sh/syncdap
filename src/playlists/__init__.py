@@ -1,7 +1,4 @@
-# ==============================================================================
-# Package: src/playlists
-# Purpose: Playlist inspection, creation, editing, merging, and track resolution
-# ==============================================================================
+"""Playlist management and repair package."""
 
 from .core import (
     AUDIO_EXTENSIONS,

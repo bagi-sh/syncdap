@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/romaji/translit.py
-# Purpose: Japanese text transliteration (Hepburn) and FAT32 sanitization
-# ==============================================================================
+"""pykakasi character transliteration helpers."""
 
 import re
 import unicodedata

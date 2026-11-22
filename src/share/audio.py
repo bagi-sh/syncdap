@@ -1,8 +1,4 @@
-# ==============================================================================
-# Module: src/share/audio.py
-# Purpose: Shared audio file discovery, universal metadata reading/writing,
-#          fidelity scoring, and playback validation.
-# ==============================================================================
+"""Universal audio metadata inspection and tag writing."""
 
 import json
 import os

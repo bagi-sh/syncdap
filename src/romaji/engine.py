@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/romaji/engine.py
-# Purpose: Directory traversal, file renaming, and execution flow for Romaji
-# ==============================================================================
+"""Japanese Romaji batch transliteration engine."""
 
 import os
 from pathlib import Path
@@ -85,7 +82,7 @@ def run_romaji_transliteration(
                         break
 
         if not pl_path.exists():
-            print(f"❌ Error: Playlist not found: {playlist_arg}")
+            print(f"[ERR] Error: Playlist not found: {playlist_arg}")
             return 1
 
         print(f"-> Mapping tracks from playlist: {pl_path.name}")
@@ -109,7 +106,7 @@ def run_romaji_transliteration(
                         playlists_to_update.append(Path(root) / f)
 
     if not audio_files:
-        print("ℹ️ No audio files found to process.")
+        print("[INFO] No audio files found to process.")
         return 0
 
     print(f"\n[Step 1/3] Processing audio tags & .lrc lyrics ({len(audio_files)} tracks)...")
@@ -189,5 +186,5 @@ def run_romaji_transliteration(
     for pl_path in playlists_to_update:
         process_playlist_file(pl_path, root_dir, path_map, dry_run, rename_fn=rename_file_or_dir)
 
-    print("\n✅ Romaji transliteration completed successfully!")
+    print("\n[OK] Romaji transliteration completed successfully!")
     return 0

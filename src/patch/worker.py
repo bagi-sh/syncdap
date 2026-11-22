@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/patch/worker.py
-# Purpose: Single track downloader, converter, and validator worker
-# ==============================================================================
+"""Worker pool for audio transcoding and stream extraction."""
 
 import os
 import uuid
@@ -21,7 +18,7 @@ def upgrade_track(idx, total, old_file, target_format, keep_old, dry_run, temp_d
     if old_ext.lower() == target_ext.lower():
         with lock:
             counters['skipped'] += 1
-            print(f"   [{idx}/{total}] ⏩ Already in {target_format.upper()}: {old_file}")
+            print(f"   [{idx}/{total}] [SKIP] Already in {target_format.upper()}: {old_file}")
         return True
 
     meta = extract_metadata_from_file(old_file)
@@ -33,12 +30,12 @@ def upgrade_track(idx, total, old_file, target_format, keep_old, dry_run, temp_d
 
     with lock:
         label = f"{artist} - {title}" if artist and title else os.path.basename(old_file)
-        print(f"   [{idx}/{total}] 🔄 Patching: {label} ({old_ext.upper()[1:]} -> {target_format.upper()})")
+        print(f"   [{idx}/{total}] [RETRY] Patching: {label} ({old_ext.upper()[1:]} -> {target_format.upper()})")
 
     if dry_run:
         with lock:
             counters['upgraded'] += 1
-            print(f"   [{idx}/{total}] 🔍 [DRY-RUN] Would download and replace: {old_file} -> {new_file}")
+            print(f"   [{idx}/{total}] [FIND] [DRY-RUN] Would download and replace: {old_file} -> {new_file}")
         return True
 
     temp_id = uuid.uuid4().hex
@@ -102,8 +99,8 @@ def upgrade_track(idx, total, old_file, target_format, keep_old, dry_run, temp_d
                 pass
         with lock:
             counters['failed'] += 1
-            print(f"   [{idx}/{total}] ❌ Failed to download or validate {target_format.upper()} for: {label}")
-            print(f"      🛡️ Safety: Original file kept intact: {old_file}")
+            print(f"   [{idx}/{total}] [ERR] Failed to download or validate {target_format.upper()} for: {label}")
+            print(f"      [SHIELD] Safety: Original file kept intact: {old_file}")
         return False
 
     album_dir = os.path.dirname(os.path.abspath(old_file))
@@ -115,7 +112,7 @@ def upgrade_track(idx, total, old_file, target_format, keep_old, dry_run, temp_d
     except Exception as e:
         with lock:
             counters['failed'] += 1
-            print(f"   [{idx}/{total}] ❌ Could not place {new_file}: {e}")
+            print(f"   [{idx}/{total}] [ERR] Could not place {new_file}: {e}")
         return False
 
     if os.path.isfile(new_file) and os.path.getsize(new_file) > 2048:
@@ -134,15 +131,15 @@ def upgrade_track(idx, total, old_file, target_format, keep_old, dry_run, temp_d
                 os.remove(old_file)
             except Exception as e:
                 with lock:
-                    print(f"      ⚠️ Warning: Could not remove old file {old_file}: {e}")
+                    print(f"      [WARN] Warning: Could not remove old file {old_file}: {e}")
 
         with lock:
             counters['upgraded'] += 1
             status_note = "replaced" if not keep_old else "kept old alongside"
-            print(f"   [{idx}/{total}] ✅ Patched ({status_note}): {new_file}")
+            print(f"   [{idx}/{total}] [OK] Patched ({status_note}): {new_file}")
         return True
     else:
         with lock:
             counters['failed'] += 1
-            print(f"   [{idx}/{total}] ❌ Unexpected error finalizing {new_file}. Keeping {old_file}")
+            print(f"   [{idx}/{total}] [ERR] Unexpected error finalizing {new_file}. Keeping {old_file}")
         return False

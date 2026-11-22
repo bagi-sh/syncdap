@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/patch/playlist.py
-# Purpose: Playlist inspection and track path synchronization for patch mode
-# ==============================================================================
+"""Playlist relinking and path updating for patched audio formats."""
 
 import os
 from share import resolve_track_file, update_all_playlists
@@ -14,7 +11,7 @@ def update_playlists(old_rel_path, new_rel_path):
 
 def handle_playlist_patch(pl_path, target_format, keep_old, dry_run, temp_dir, js_args, threads, assume_yes):
     """Scan and patch tracks referenced by a specific playlist file."""
-    print(f"\n📋 Playlist mode: Inspecting entries in '{os.path.basename(pl_path)}'...")
+    print(f"\n[PL] Playlist mode: Inspecting entries in '{os.path.basename(pl_path)}'...")
     pl_dir = os.path.dirname(os.path.abspath(pl_path))
 
     target_ext = f".{target_format.lower()}"
@@ -39,9 +36,9 @@ def handle_playlist_patch(pl_path, target_format, keep_old, dry_run, temp_dir, j
             if ext != target_ext:
                 files_to_upgrade.append(os.path.relpath(resolved, '.'))
             else:
-                print(f"   ⏩ Already in {target_format.upper()}: {os.path.basename(resolved)}")
+                print(f"   [SKIP] Already in {target_format.upper()}: {os.path.basename(resolved)}")
         else:
-            print(f"\n   ⚠️ Audio file for '{s}' does not exist on disk.")
+            print(f"\n   [WARN] Audio file for '{s}' does not exist on disk.")
             track_album = os.path.dirname(os.path.abspath(resolved))
             track_artist = os.path.dirname(track_album)
 
@@ -78,6 +75,6 @@ def handle_playlist_patch(pl_path, target_format, keep_old, dry_run, temp_dir, j
         new_lines = [l for l in playlist_lines if l not in lines_to_remove]
         with open(pl_path, 'w', encoding='utf-8') as f:
             f.writelines(new_lines)
-        print(f"   🧹 {len(lines_to_remove)} missing entry(ies) removed from '{os.path.basename(pl_path)}'.")
+        print(f"   [CLEAN] {len(lines_to_remove)} missing entry(ies) removed from '{os.path.basename(pl_path)}'.")
 
     return sorted(list(set(files_to_upgrade)))

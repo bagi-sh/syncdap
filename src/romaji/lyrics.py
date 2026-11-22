@@ -1,7 +1,4 @@
-# ==============================================================================
-# Module: src/romaji/lyrics.py
-# Purpose: Transliteration of .lrc synced and unsynced lyric files
-# ==============================================================================
+"""Romaji lyrics transliteration while preserving timestamp tags."""
 
 import re
 import threading

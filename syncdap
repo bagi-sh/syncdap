@@ -28,7 +28,10 @@ main() {
         dedup)      orchestrate_dedup ;;
         patch)      orchestrate_patch ;;
         optimize)   orchestrate_optimize ;;
-        album)      orchestrate_album "$SUBACTION" ;;
+        library)    orchestrate_library "$SUBACTION" "${COMMAND_ARGS[@]:-}" ;;
+        artist)     orchestrate_artist "$SUBACTION" "${COMMAND_ARGS[@]:-}" ;;
+        album)      orchestrate_album "$SUBACTION" "${COMMAND_ARGS[@]:-}" ;;
+        track)      orchestrate_track "$SUBACTION" "${COMMAND_ARGS[@]:-}" ;;
         covers)     orchestrate_covers "$SUBACTION" ;;
         lyrics)     orchestrate_lyrics "$SUBACTION" ;;
         playlist)   orchestrate_playlist "$SUBACTION" ;;
@@ -36,7 +39,6 @@ main() {
         config)     handle_config_command "${COMMAND_ARGS[@]:-}" ;;
         update)     perform_update ;;
         uninstall)  perform_uninstall ;;
-        library)    orchestrate_library "$SUBACTION" ;;
         *)
             error_dual "Unrecognized command '$SUBCOMMAND'" "The specified command is not supported by syncdap" "$SUBCOMMAND" "" "Run 'syncdap --help' for usage instructions."
             exit 2

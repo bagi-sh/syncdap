@@ -28,6 +28,12 @@ def find_audio_files(root_dir: str) -> list[str]:
     audio_files = []
     root_path = os.path.abspath(root_dir)
 
+    if os.path.isfile(root_path):
+        ext = os.path.splitext(root_path)[1].lower()
+        if ext in AUDIO_EXTENSIONS:
+            return [root_path]
+        return []
+
     for dirpath, dirnames, filenames in os.walk(root_path):
         dirnames[:] = [
             d for d in dirnames

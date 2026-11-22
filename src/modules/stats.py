@@ -74,20 +74,27 @@ def analyze_library(root_dir, output_format="table"):
     flac_hires_count = 0
     flac_16bit_count = 0
 
-    for dirpath, dirnames, filenames in os.walk(root_path):
-        dirnames[:] = [d for d in dirnames if d.lower() not in IGNORED_DIRS and not d.startswith('.Trash')]
+    if os.path.isfile(root_path):
+        ext = os.path.splitext(root_path)[1].lower()
+        if ext in AUDIO_EXTENSIONS:
+            dirpath = os.path.dirname(root_path)
+            has_standalone = any(os.path.isfile(os.path.join(dirpath, cn)) and os.path.getsize(os.path.join(dirpath, cn)) > 0 for cn in COVER_FILENAMES)
+            album_dirs[dirpath] = ([(root_path, ext)], has_standalone)
+    else:
+        for dirpath, dirnames, filenames in os.walk(root_path):
+            dirnames[:] = [d for d in dirnames if d.lower() not in IGNORED_DIRS and not d.startswith('.Trash')]
 
-        has_standalone = any(os.path.isfile(os.path.join(dirpath, cn)) and os.path.getsize(os.path.join(dirpath, cn)) > 0 for cn in COVER_FILENAMES)
+            has_standalone = any(os.path.isfile(os.path.join(dirpath, cn)) and os.path.getsize(os.path.join(dirpath, cn)) > 0 for cn in COVER_FILENAMES)
 
-        dir_audio = []
-        for f in filenames:
-            ext = os.path.splitext(f)[1].lower()
-            if ext in AUDIO_EXTENSIONS:
-                full_path = os.path.join(dirpath, f)
-                dir_audio.append((full_path, ext))
+            dir_audio = []
+            for f in filenames:
+                ext = os.path.splitext(f)[1].lower()
+                if ext in AUDIO_EXTENSIONS:
+                    full_path = os.path.join(dirpath, f)
+                    dir_audio.append((full_path, ext))
 
-        if dir_audio:
-            album_dirs[dirpath] = (dir_audio, has_standalone)
+            if dir_audio:
+                album_dirs[dirpath] = (dir_audio, has_standalone)
 
     for dirpath, (dir_audio, has_standalone) in album_dirs.items():
         if has_standalone:

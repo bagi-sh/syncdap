@@ -6,7 +6,7 @@
 
 show_help() {
     cat << EOF
-Usage: syncdap <resource> [action] [options]
+Usage: syncdap <resource> [action] [target] [options]
 
 Rockbox and Digital Audio Player (DAP) music library synchronization manager.
 
@@ -14,13 +14,15 @@ Resources:
   download <URL>   Download track, album, or playlist from Spotify
   search <query>   Search track or album by name via metadata APIs
   rescue [target]  Stream recovery via fallback downloader
-  status           Display library health and statistics dashboard
-  library          Library-wide maintenance (dedup, optimize)
-  album            Album rip unbundling and duration auditing
+  library          Library-wide operations (status, audit, dedup, optimize, patch, fix, romaji)
+  artist           Artist-scoped operations (status, audit, dedup, fix, romaji, patch)
+  album            Album-scoped operations (status, audit, dedup, expand, optimize, patch, fix, romaji)
+  track            Track-scoped operations (status, audit, expand, patch, romaji)
+  playlist         M3U/M3U8 playlist management, repair, and cleanup
   covers           Album artwork extraction and tag embedding
   lyrics           Synchronized LRC lyrics maintenance and embedding
-  playlist         M3U/M3U8 playlist management, repair, and cleanup
   tags             Audio metadata standardization and transliteration
+  status           Display library health and statistics (alias to library status)
   config           Inspect or modify persistent configuration
   update           Update syncdap to latest git commit
   uninstall        Completely remove syncdap from system
@@ -52,8 +54,35 @@ Usage: syncdap library <action> [options]
 Library-wide maintenance and optimization utilities.
 
 Actions:
+  status      Display library health, statistics, and storage dashboard
+  audit       Audit library tracks >10m against metadata APIs
   dedup       Deduplicate tracks keeping highest audio quality
   optimize    Execute complete Rockbox/DAP library optimization pipeline
+  patch [fmt] Transcode or upgrade entire library to target format
+  fix         Unify ALBUM/ALBUMARTIST tags and clean ghost files
+  romaji      Transliterate Japanese tags and paths across library
+
+Options:
+  -r, --root-dir <path> Target music library or DAP mount root
+  -n, --dry-run         Simulate execution without modifying files
+  -v, --verbose         Show detailed execution diagnostics
+  --json                Output results as JSON (status, audit)
+  --plain               Output results as plain text (status)
+EOF
+            ;;
+        artist)
+            cat << EOF
+Usage: syncdap artist <action> <artist> [options]
+
+Artist-scoped maintenance and inspection utilities.
+
+Actions:
+  status <artist>      Display artist track count, formats, and health
+  audit <artist>       Audit artist tracks >10m against metadata APIs
+  dedup <artist>       Deduplicate tracks within this artist folder
+  fix <artist>         Standardize artist metadata and ALBUMARTIST tags
+  romaji <artist>      Transliterate Japanese tags for this artist
+  patch [fmt] <artist> Transcode artist tracks to target format
 
 Options:
   -r, --root-dir <path> Target music library or DAP mount root
@@ -63,19 +92,44 @@ EOF
             ;;
         album)
             cat << EOF
-Usage: syncdap album <action> [options]
+Usage: syncdap album <action> [album_dir] [options]
 
-Album unbundling and full-album rip duration auditing.
+Album-scoped maintenance, unbundling, and inspection utilities.
 
 Actions:
-  expand [file]  Unbundle full-album single-file rip(s) into individual tracks
-  audit          Audit library tracks >10m against metadata APIs
+  status [album]       Display album statistics and track health
+  audit [album]        Audit album tracks >10m against metadata APIs
+  dedup [album]        Deduplicate tracks within this album
+  expand [file]        Unbundle full-album single-file rip into individual tracks
+  optimize [album]     Optimize album for Rockbox (covers + tags + dedup)
+  fix [album]          Standardize album metadata and ALBUMARTIST tags
+  romaji [album]       Transliterate Japanese tags for this album
+  patch [fmt] [album]  Transcode album tracks to target format
 
 Options:
   -r, --root-dir <path> Target music library or DAP mount root
   -F, --format <fmt>    Target audio format for re-downloaded tracks
   -n, --dry-run         Simulate execution without modifying files
   --json                Output audit results as machine-readable JSON
+EOF
+            ;;
+        track)
+            cat << EOF
+Usage: syncdap track <action> <file> [options]
+
+Single-track inspection and maintenance utilities.
+
+Actions:
+  status <file>       Inspect single track metadata, format, bitrate, and lyrics
+  audit <file>        Check if track duration exceeds API duration (>1.5x)
+  expand <file>       Expand single-file album rip into tagged tracks
+  romaji <file>       Transliterate Japanese metadata in track tags and .lrc
+  patch [fmt] <file>  Transcode single track to target audio format
+
+Options:
+  -F, --format <fmt>  Target audio format for re-downloaded or transcoded track
+  -n, --dry-run       Simulate execution without modifying files
+  --json              Output track status as JSON
 EOF
             ;;
         covers)
@@ -164,7 +218,7 @@ EOF
             cat << EOF
 Usage: syncdap status [options]
 
-Display library health and statistics dashboard.
+Display library health and statistics dashboard (alias to 'syncdap library status').
 
 Options:
   -r, --root-dir <path> Target music library or DAP mount root
@@ -383,7 +437,7 @@ parse_arguments() {
 
     # Route hierarchical resources
     case "$SUBCOMMAND" in
-        library|album|covers|lyrics|playlist|tags)
+        library|artist|album|track|covers|lyrics|playlist|tags)
             if [ ${#raw_positionals[@]} -lt 2 ]; then
                 error_dual "Missing action for '$SUBCOMMAND'" "Resource requires a specific action" "syncdap $SUBCOMMAND" "" "Run 'syncdap $SUBCOMMAND --help' to view available actions."
                 exit 2
@@ -396,14 +450,34 @@ parse_arguments() {
             # Validate actions per resource
             case "$SUBCOMMAND" in
                 library)
-                    if [[ "$SUBACTION" != "dedup" && "$SUBACTION" != "optimize" ]]; then
-                        error_dual "Invalid action '$SUBACTION' for 'library'" "Supported actions: dedup, optimize" "syncdap library $SUBACTION" "" "Run 'syncdap library --help' for available actions."
+                    if [[ ! "$SUBACTION" =~ ^(status|audit|dedup|optimize|patch|fix|romaji)$ ]]; then
+                        error_dual "Invalid action '$SUBACTION' for 'library'" "Supported actions: status, audit, dedup, optimize, patch, fix, romaji" "syncdap library $SUBACTION" "" "Run 'syncdap library --help' for available actions."
+                        exit 2
+                    fi
+                    ;;
+                artist)
+                    if [[ ! "$SUBACTION" =~ ^(status|audit|dedup|fix|romaji|patch)$ ]]; then
+                        error_dual "Invalid action '$SUBACTION' for 'artist'" "Supported actions: status, audit, dedup, fix, romaji, patch" "syncdap artist $SUBACTION" "" "Run 'syncdap artist --help' for available actions."
+                        exit 2
+                    fi
+                    if [ ${#COMMAND_ARGS[@]} -eq 0 ]; then
+                        error_dual "Missing artist target" "Artist-scoped commands require an artist name or directory" "syncdap artist $SUBACTION <artist>" "" "Example: syncdap artist $SUBACTION 'Queen'"
                         exit 2
                     fi
                     ;;
                 album)
-                    if [[ "$SUBACTION" != "expand" && "$SUBACTION" != "audit" ]]; then
-                        error_dual "Invalid action '$SUBACTION' for 'album'" "Supported actions: expand, audit" "syncdap album $SUBACTION" "" "Run 'syncdap album --help' for available actions."
+                    if [[ ! "$SUBACTION" =~ ^(status|audit|dedup|expand|optimize|patch|fix|romaji)$ ]]; then
+                        error_dual "Invalid action '$SUBACTION' for 'album'" "Supported actions: status, audit, dedup, expand, optimize, patch, fix, romaji" "syncdap album $SUBACTION" "" "Run 'syncdap album --help' for available actions."
+                        exit 2
+                    fi
+                    ;;
+                track)
+                    if [[ ! "$SUBACTION" =~ ^(status|audit|expand|patch|romaji)$ ]]; then
+                        error_dual "Invalid action '$SUBACTION' for 'track'" "Supported actions: status, audit, expand, patch, romaji" "syncdap track $SUBACTION" "" "Run 'syncdap track --help' for available actions."
+                        exit 2
+                    fi
+                    if [ ${#COMMAND_ARGS[@]} -eq 0 ]; then
+                        error_dual "Missing audio file target" "Track-scoped commands require an audio file path" "syncdap track $SUBACTION <file>" "" "Example: syncdap track $SUBACTION 'song.flac'"
                         exit 2
                     fi
                     ;;
@@ -438,13 +512,21 @@ parse_arguments() {
                 COMMAND_ARGS=("${raw_positionals[@]:1}")
             fi
             ;;
-        download|search|rescue|status|patch|update|uninstall)
+        download|search|rescue|patch|update|uninstall)
+            if [ ${#raw_positionals[@]} -gt 1 ]; then
+                COMMAND_ARGS=("${raw_positionals[@]:1}")
+            fi
+            ;;
+        status)
+            # Route 'syncdap status' as 'syncdap library status'
+            SUBCOMMAND="library"
+            SUBACTION="status"
             if [ ${#raw_positionals[@]} -gt 1 ]; then
                 COMMAND_ARGS=("${raw_positionals[@]:1}")
             fi
             ;;
         dedup)
-            # Seamless alias to 'library dedup'
+            # Route 'syncdap dedup' as 'syncdap library dedup'
             SUBCOMMAND="library"
             SUBACTION="dedup"
             if [ ${#raw_positionals[@]} -gt 1 ]; then
@@ -452,7 +534,7 @@ parse_arguments() {
             fi
             ;;
         optimize)
-            # Seamless alias to 'library optimize'
+            # Route 'syncdap optimize' as 'syncdap library optimize'
             SUBCOMMAND="library"
             SUBACTION="optimize"
             if [ ${#raw_positionals[@]} -gt 1 ]; then

@@ -107,8 +107,7 @@ orchestrate_rescue() {
 
 # --- STATUS & ANALYTICS ORCHESTRATION ---
 orchestrate_status() {
-    local target_dir
-    target_dir="$(resolve_music_root)"
+    local target_dir="${1:-$(resolve_music_root)}"
     local extra_args=()
     [ "$OUTPUT_FORMAT" = "json" ] && extra_args+=(--json)
     [ "$OUTPUT_FORMAT" = "plain" ] && extra_args+=(--plain)
@@ -118,8 +117,7 @@ orchestrate_status() {
 
 # --- DEDUPLICATION ORCHESTRATION ---
 orchestrate_dedup() {
-    local target_dir
-    target_dir="$(resolve_music_root)"
+    local target_dir="${1:-$(resolve_music_root)}"
     local dry_flag=""
     [ "$DRY_RUN" = true ] && dry_flag="--dry-run"
 
@@ -159,45 +157,145 @@ orchestrate_patch() {
     echo -e "${GREEN}${ICON_OK} Audio format patch completed successfully.${RESET}"
 }
 
-# --- LIBRARY ORCHESTRATION ---
-orchestrate_library() {
-    local action="${1:-${SUBACTION:-}}"
-    case "$action" in
-        dedup)
-            orchestrate_dedup
-            ;;
-        optimize)
-            orchestrate_optimize
-            ;;
-        *)
-            error_dual "Invalid library action" "Supported actions: dedup, optimize" "syncdap library $action" "" "Run 'syncdap library --help'"
-            exit 2
-            ;;
-    esac
-}
-
+# --- FULL OPTIMIZATION PIPELINE ---
 orchestrate_optimize() {
+    local target_dir="${1:-$(resolve_music_root)}"
     if [ "$QUIET" = false ]; then
-        echo -e "${ICON_DISC} Running complete Rockbox library optimization pipeline..." >&2
+        echo -e "${ICON_DISC} Running Rockbox library optimization pipeline on: ${BOLD}$target_dir${RESET}" >&2
     fi
 
-    orchestrate_dedup
-    orchestrate_covers "optimize"
-    orchestrate_tags "fix"
+    orchestrate_dedup "$target_dir"
+    orchestrate_covers "optimize" "$target_dir"
+    orchestrate_tags "fix" "$target_dir"
     orchestrate_playlist "repair"
     cleanup_empty_dirs
 
     echo -e "${GREEN}${ICON_OK} Library optimization pipeline completed.${RESET}"
 }
 
-# --- ALBUM HIERARCHY ORCHESTRATION (expand | audit) ---
+# --- LIBRARY ORCHESTRATION ---
+orchestrate_library() {
+    local action="${1:-${SUBACTION:-}}"
+    local music_root
+    music_root="$(resolve_music_root)"
+
+    case "$action" in
+        status)
+            orchestrate_status "$music_root"
+            ;;
+        audit)
+            local audit_args=("-r" "$music_root")
+            [ "$OUTPUT_FORMAT" = "json" ] && audit_args+=(--json)
+            run_py "$SCRIPT_DIR/src/modules/audit.py" "${audit_args[@]}"
+            ;;
+        dedup)
+            orchestrate_dedup "$music_root"
+            ;;
+        optimize)
+            orchestrate_optimize "$music_root"
+            ;;
+        patch)
+            orchestrate_patch "${COMMAND_ARGS[@]:-}"
+            ;;
+        fix)
+            local dry_flag=""
+            [ "$DRY_RUN" = true ] && dry_flag="--dry-run"
+            run_py "$SCRIPT_DIR/src/modules/rockbox_tags.py" -r "$music_root" $dry_flag
+            ;;
+        romaji)
+            local romaji_args=("-r" "$music_root" "-t" "$THREADS" "-a")
+            [ "$DRY_RUN" = true ] && romaji_args+=("-n")
+            run_py "$SCRIPT_DIR/src/romaji/cli.py" "${romaji_args[@]}"
+            ;;
+        *)
+            error_dual "Invalid library action '$action'" "Supported actions: status, audit, dedup, optimize, patch, fix, romaji" "syncdap library $action" "" "Run 'syncdap library --help'"
+            exit 2
+            ;;
+    esac
+}
+
+# --- ARTIST ORCHESTRATION ---
+orchestrate_artist() {
+    local action="${1:-${SUBACTION:-}}"
+    local target="${2:-${COMMAND_ARGS[0]:-}}"
+    local music_root
+    music_root="$(resolve_music_root)"
+
+    local artist_dir=""
+    if [ -d "$target" ]; then
+        artist_dir="$(readlink -f "$target")"
+    else
+        artist_dir=$(find "$music_root" -mindepth 1 -maxdepth 2 -type d -iname "*$target*" 2>/dev/null | head -n 1)
+    fi
+
+    if [ -z "$artist_dir" ] || [ ! -d "$artist_dir" ]; then
+        error_dual "Artist not found" "No directory matching '$target' found in library" "$target" "" "Specify a valid artist directory or name within $music_root"
+        exit 1
+    fi
+
+    case "$action" in
+        status)
+            orchestrate_status "$artist_dir"
+            ;;
+        audit)
+            local audit_args=("-r" "$artist_dir")
+            [ "$OUTPUT_FORMAT" = "json" ] && audit_args+=(--json)
+            run_py "$SCRIPT_DIR/src/modules/audit.py" "${audit_args[@]}"
+            ;;
+        dedup)
+            orchestrate_dedup "$artist_dir"
+            ;;
+        fix)
+            local dry_flag=""
+            [ "$DRY_RUN" = true ] && dry_flag="--dry-run"
+            run_py "$SCRIPT_DIR/src/modules/rockbox_tags.py" -r "$artist_dir" $dry_flag
+            ;;
+        romaji)
+            local romaji_args=("-r" "$music_root" "-t" "$THREADS" "-p" "$artist_dir")
+            [ "$DRY_RUN" = true ] && romaji_args+=("-n")
+            run_py "$SCRIPT_DIR/src/romaji/cli.py" "${romaji_args[@]}"
+            ;;
+        patch)
+            local patch_fmt="${COMMAND_ARGS[0]:-${AUDIO_FORMAT:-flac}}"
+            COMMAND_ARGS=("$patch_fmt" "$artist_dir")
+            orchestrate_patch "${COMMAND_ARGS[@]}"
+            ;;
+        *)
+            error_dual "Invalid artist action '$action'" "Supported actions: status, audit, dedup, fix, romaji, patch" "syncdap artist $action" "" "Run 'syncdap artist --help'"
+            exit 2
+            ;;
+    esac
+}
+
+# --- ALBUM ORCHESTRATION ---
 orchestrate_album() {
     local action="${1:-${SUBACTION:-}}"
     local target="${2:-${COMMAND_ARGS[0]:-}}"
     local music_root
     music_root="$(resolve_music_root)"
 
+    local album_dir=""
+    if [ -n "$target" ]; then
+        if [ -d "$target" ] || [ -f "$target" ]; then
+            album_dir="$(readlink -f "$target")"
+        else
+            album_dir=$(find "$music_root" -mindepth 1 -maxdepth 3 -type d -iname "*$target*" 2>/dev/null | head -n 1)
+        fi
+    fi
+    [ -z "$album_dir" ] && album_dir="$music_root"
+
     case "$action" in
+        status)
+            orchestrate_status "$album_dir"
+            ;;
+        audit)
+            local audit_args=("-r" "$album_dir")
+            [ "$OUTPUT_FORMAT" = "json" ] && audit_args+=(--json)
+            run_py "$SCRIPT_DIR/src/modules/audit.py" "${audit_args[@]}"
+            ;;
+        dedup)
+            orchestrate_dedup "$album_dir"
+            ;;
         expand)
             local expand_args=("-r" "$music_root" "-t" "$THREADS")
             [ "$DRY_RUN" = true ] && expand_args+=(--dry-run)
@@ -205,23 +303,77 @@ orchestrate_album() {
             [ -n "$AUDIO_FORMAT" ] && expand_args+=("-F" "$AUDIO_FORMAT")
             [ "$SYNCED_ONLY" = true ] && expand_args+=(--synced-only)
 
-            if [ -n "$target" ]; then
-                if [ ! -f "$target" ]; then
-                    error_dual "Target file not found" "The specified audio file does not exist on disk" "$target" "" "Pass a valid file path: syncdap album expand '/path/to/rip.mp3'"
-                    exit 1
-                fi
+            if [ -n "$target" ] && [ -f "$target" ]; then
                 expand_args+=("$target")
             fi
-
             run_py "$SCRIPT_DIR/src/modules/album_expander.py" "${expand_args[@]}"
             ;;
+        optimize)
+            orchestrate_optimize "$album_dir"
+            ;;
+        fix)
+            local dry_flag=""
+            [ "$DRY_RUN" = true ] && dry_flag="--dry-run"
+            run_py "$SCRIPT_DIR/src/modules/rockbox_tags.py" -r "$album_dir" $dry_flag
+            ;;
+        romaji)
+            local romaji_args=("-r" "$music_root" "-t" "$THREADS" "-p" "$album_dir")
+            [ "$DRY_RUN" = true ] && romaji_args+=("-n")
+            run_py "$SCRIPT_DIR/src/romaji/cli.py" "${romaji_args[@]}"
+            ;;
+        patch)
+            local patch_fmt="${COMMAND_ARGS[0]:-${AUDIO_FORMAT:-flac}}"
+            COMMAND_ARGS=("$patch_fmt" "$album_dir")
+            orchestrate_patch "${COMMAND_ARGS[@]}"
+            ;;
+        *)
+            error_dual "Invalid album action '$action'" "Supported actions: status, audit, dedup, expand, optimize, patch, fix, romaji" "syncdap album $action" "" "Run 'syncdap album --help'"
+            exit 2
+            ;;
+    esac
+}
+
+# --- TRACK ORCHESTRATION ---
+orchestrate_track() {
+    local action="${1:-${SUBACTION:-}}"
+    local target="${2:-${COMMAND_ARGS[0]:-}}"
+
+    if [ -z "$target" ] || [ ! -f "$target" ]; then
+        error_dual "Audio file not found" "Track operations require a valid audio file" "$target" "" "Pass a valid file path: syncdap track $action '/path/to/song.flac'"
+        exit 1
+    fi
+    local track_path
+    track_path="$(readlink -f "$target")"
+
+    case "$action" in
+        status)
+            orchestrate_status "$track_path"
+            ;;
         audit)
-            local audit_args=("-r" "$music_root")
+            local audit_args=("-r" "$track_path")
             [ "$OUTPUT_FORMAT" = "json" ] && audit_args+=(--json)
             run_py "$SCRIPT_DIR/src/modules/audit.py" "${audit_args[@]}"
             ;;
+        expand)
+            local expand_args=("-r" "$(dirname "$track_path")" "-t" "$THREADS" "$track_path")
+            [ "$DRY_RUN" = true ] && expand_args+=(--dry-run)
+            [ "$ASSUME_YES" = true ] && expand_args+=(--yes)
+            [ -n "$AUDIO_FORMAT" ] && expand_args+=("-F" "$AUDIO_FORMAT")
+            [ "$SYNCED_ONLY" = true ] && expand_args+=(--synced-only)
+            run_py "$SCRIPT_DIR/src/modules/album_expander.py" "${expand_args[@]}"
+            ;;
+        patch)
+            local patch_fmt="${COMMAND_ARGS[1]:-${AUDIO_FORMAT:-flac}}"
+            COMMAND_ARGS=("$patch_fmt" "$track_path")
+            orchestrate_patch "${COMMAND_ARGS[@]}"
+            ;;
+        romaji)
+            local romaji_args=("-r" "$(dirname "$track_path")" "-t" "$THREADS" "-p" "$track_path")
+            [ "$DRY_RUN" = true ] && romaji_args+=("-n")
+            run_py "$SCRIPT_DIR/src/romaji/cli.py" "${romaji_args[@]}"
+            ;;
         *)
-            error_dual "Invalid album action '$action'" "Available album actions are 'expand' and 'audit'" "syncdap album $action" "" "Usage: syncdap album <expand [file] | audit>"
+            error_dual "Invalid track action '$action'" "Supported actions: status, audit, expand, patch, romaji" "syncdap track $action" "" "Run 'syncdap track --help'"
             exit 2
             ;;
     esac

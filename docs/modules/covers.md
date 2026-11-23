@@ -12,12 +12,16 @@
 
 ---
 
-## 2. CLI Usage
+## 2. Invocation
+
+`covers.py` is called internally by the orchestrator (`syncdap covers optimize` or `syncdap covers embed`) by generating a temporary directory list:
 
 ```bash
-# Optimize album covers for Rockbox (extracts cover.jpg and strips embedded art)
-python3 src/modules/covers.py optimize dirs_list.txt 4
+# Recommended high-level interface:
+./syncdap covers optimize
+./syncdap covers embed
 
-# Embed local cover.jpg files back into audio tags
+# Direct internal script execution:
+python3 src/modules/covers.py optimize dirs_list.txt 4
 python3 src/modules/covers.py embed dirs_list.txt 4
 ```

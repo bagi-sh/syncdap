@@ -23,7 +23,7 @@ This guide walks you through setting up `syncdap` on a Linux system.
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/syncdap.git
+   git clone https://github.com/bagi-sh/syncdap.git
    cd syncdap
    ```
 

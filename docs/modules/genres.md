@@ -15,9 +15,14 @@
 
 ---
 
-## 2. CLI Usage
+## 2. Invocation
+
+`genres.py` is invoked through `syncdap tags genres`, which compiles target directories into a temporary file:
 
 ```bash
-# Enrich missing genres across album folders listed in file
+# Recommended high-level interface:
+./syncdap tags genres
+
+# Direct internal module execution:
 python3 src/modules/genres.py album_dirs.txt 4
 ```

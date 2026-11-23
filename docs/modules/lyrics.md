@@ -13,15 +13,18 @@
 
 ---
 
-## 2. CLI Usage
+## 2. Invocation
+
+`lyrics.py` is invoked through `syncdap lyrics fetch` or `syncdap lyrics embed`:
 
 ```bash
-# Fetch missing .lrc files
+# Recommended high-level interface:
+./syncdap lyrics fetch
+./syncdap lyrics fetch --synced-only
+./syncdap lyrics embed
+
+# Direct internal module execution:
 python3 src/modules/lyrics.py album_dirs.txt 4 false
-
-# Fetch strictly synchronized lyrics
 python3 src/modules/lyrics.py album_dirs.txt 4 true
-
-# Fetch and embed directly into audio tags
 python3 src/modules/lyrics.py album_dirs.txt 4 true --embed
 ```

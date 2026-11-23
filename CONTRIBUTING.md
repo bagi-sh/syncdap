@@ -35,7 +35,7 @@ To run and develop `syncdap`, your system needs:
 ### Getting Started
 1. Fork and clone the repository:
    ```bash
-   git clone https://github.com/your-username/syncdap.git
+   git clone https://github.com/bagi-sh/syncdap.git
    cd syncdap
    ```
 2. Verify system dependencies:

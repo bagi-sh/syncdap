@@ -18,7 +18,7 @@ Modular synchronization, metadata standardization, and media maintenance coordin
 ### 30-Second Ingestion & Sync
 ```bash
 # 1. Clone repository
-git clone https://github.com/your-username/syncdap.git
+git clone https://github.com/bagi-sh/syncdap.git
 cd syncdap
 
 # 2. Inspect music library status

@@ -26,28 +26,35 @@ from .lyrics import (
     embed_lyrics_into_file,
     is_lrc_synced,
 )
-from .covers import (
-    find_cover_image,
-    extract_cover_from_file,
-    embed_cover_in_file,
-    has_embedded_cover,
-    strip_covers_from_file,
-)
-from .audio import (
-    find_audio_files,
-    read_audio_metadata,
-    get_audio_metadata,
-    write_audio_metadata,
-    set_audio_genre,
-    has_embedded_cover_fast,
-    get_file_duration,
-    is_lossless,
-    get_bitrate_kbps,
-    track_number_from_filename,
-    get_audio_quality_score,
-    audio_quality_wins,
-    is_valid_audio,
-)
+try:
+    from .covers import (
+        find_cover_image,
+        extract_cover_from_file,
+        embed_cover_in_file,
+        has_embedded_cover,
+        strip_covers_from_file,
+    )
+except ImportError:
+    pass
+
+try:
+    from .audio import (
+        find_audio_files,
+        read_audio_metadata,
+        get_audio_metadata,
+        write_audio_metadata,
+        set_audio_genre,
+        has_embedded_cover_fast,
+        get_file_duration,
+        is_lossless,
+        get_bitrate_kbps,
+        track_number_from_filename,
+        get_audio_quality_score,
+        audio_quality_wins,
+        is_valid_audio,
+    )
+except ImportError:
+    pass
 from .playlists import (
     get_default_playlist_dir,
     find_playlist_file,

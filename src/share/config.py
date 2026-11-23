@@ -4,6 +4,18 @@ import os
 from pathlib import Path
 
 
+def get_config_dir() -> Path:
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    base = Path(xdg) if xdg else Path.home() / ".config"
+    target = base / "syncdap"
+    if target.is_dir():
+        return target
+    local_target = Path.cwd() / ".config" / "syncdap"
+    if local_target.is_dir():
+        return local_target
+    return target
+
+
 def get_config_path() -> Path:
     xdg = os.environ.get("XDG_CONFIG_HOME")
     base = Path(xdg) if xdg else Path.home() / ".config"
@@ -14,6 +26,18 @@ def get_config_path() -> Path:
     if local_target.is_file():
         return local_target
     return target
+
+
+def get_lastfm_session_path() -> Path:
+    return get_config_dir() / "lastfm.conf"
+
+
+def get_scrobbler_state_path() -> Path:
+    return get_config_dir() / "scrobbler.state"
+
+
+def get_scrobbler_log_archive_dir() -> Path:
+    return get_config_dir() / "logs"
 
 
 def load_config() -> dict[str, str]:

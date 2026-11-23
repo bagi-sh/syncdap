@@ -510,3 +510,28 @@ orchestrate_tags() {
             ;;
     esac
 }
+
+# --- SCROBBLER ORCHESTRATION (sync | auth | status | logout) ---
+orchestrate_scrobbler() {
+    setup_environment
+    local action="${1:-${SUBACTION:-sync}}"
+    local scrobbler_args=("$action")
+
+    [ -n "$TARGET_ROOT" ] && scrobbler_args+=("-r" "$TARGET_ROOT")
+    [ "$DRY_RUN" = true ] && scrobbler_args+=("-n")
+    [ "$ASSUME_YES" = true ] && scrobbler_args+=("-y")
+    [ "$VERBOSE" = true ] && scrobbler_args+=("-v")
+    [ "$QUIET" = true ] && scrobbler_args+=("-q")
+    [ "$OUTPUT_FORMAT" = "json" ] && scrobbler_args+=("--json")
+    [ "$OUTPUT_FORMAT" = "plain" ] && scrobbler_args+=("--plain")
+    [ -n "${TZ_OFFSET:-}" ] && scrobbler_args+=("--tz-offset" "$TZ_OFFSET")
+    [ "${KEEP_LOG:-false}" = true ] && scrobbler_args+=("--keep-log")
+    [ -n "${CONFIG_FILE:-}" ] && scrobbler_args+=("-c" "$CONFIG_FILE")
+
+    if [ ${#COMMAND_ARGS[@]} -gt 0 ]; then
+        scrobbler_args+=("${COMMAND_ARGS[@]}")
+    fi
+
+    run_py "$SCRIPT_DIR/src/scrobbler/cli.py" "${scrobbler_args[@]}"
+}
+

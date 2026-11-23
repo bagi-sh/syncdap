@@ -22,6 +22,7 @@ Resources:
   covers           Album artwork extraction and tag embedding
   lyrics           Synchronized LRC lyrics maintenance and embedding
   tags             Audio metadata standardization and transliteration
+  scrobbler        Last.fm Rockbox scrobble synchronization (sync, auth, status, logout)
   status           Display library health and statistics (alias to library status)
   config           Inspect or modify persistent configuration
   update           Update syncdap to latest git commit
@@ -226,6 +227,30 @@ Options:
   --plain               Output tab-separated plain text summary
 EOF
             ;;
+        scrobbler)
+            cat << EOF
+Usage: syncdap scrobbler [action] [target] [options]
+
+Last.fm Rockbox scrobble synchronization and account management.
+
+Actions:
+  sync [path]   Parse .scrobbler.log, submit batches of 50, and rotate log (default)
+  auth          Execute Last.fm desktop browser authentication
+  status [path] Display session validity, watermark, and pending scrobbles
+  logout        Revoke local Last.fm session credentials
+
+Options:
+  -r, --root-dir <path> Target music library or DAP mount root (default: .)
+  --tz-offset <hours>   Explicit UTC offset (e.g. -3) when log reports #TZ/UNKNOWN
+  --keep-log            Retain .scrobbler.log on DAP after upload
+  -n, --dry-run         Simulate execution without modifying files or submitting
+  -y, --yes             Skip confirmation prompts during authentication
+  -v, --verbose         Show detailed execution diagnostics
+  -q, --quiet           Suppress non-error status output
+  --json                Output machine-readable JSON
+  --plain               Output headerless tab-separated plain text
+EOF
+            ;;
         download)
             cat << EOF
 Usage: syncdap [download] <URL> [options]
@@ -292,6 +317,9 @@ SUBCOMMAND=""
 SUBACTION=""
 COMMAND_ARGS=()
 OUTPUT_FORMAT="table"
+TZ_OFFSET=""
+KEEP_LOG=false
+AUTH_FLAG=false
 
 parse_arguments() {
     if [ $# -eq 0 ]; then
@@ -331,6 +359,22 @@ parse_arguments() {
             --keep-old)
                 KEEP_OLD=true
                 shift 1
+                ;;
+            --keep-log)
+                KEEP_LOG=true
+                shift 1
+                ;;
+            --auth)
+                AUTH_FLAG=true
+                shift 1
+                ;;
+            --tz-offset|--timezone)
+                if [[ $# -lt 2 ]] || [[ "$2" =~ ^-?[a-zA-Z] ]]; then
+                    error_dual "Missing timezone offset" "$1 requires hours (e.g. -3 or 2)" "" "" "Pass a valid offset: syncdap scrobbler $1 -3"
+                    exit 2
+                fi
+                TZ_OFFSET="$2"
+                shift 2
                 ;;
             --synced-only)
                 SYNCED_ONLY=true
@@ -510,6 +554,27 @@ parse_arguments() {
         config)
             if [ ${#raw_positionals[@]} -gt 1 ]; then
                 COMMAND_ARGS=("${raw_positionals[@]:1}")
+            fi
+            ;;
+        scrobbler)
+            if [ "$AUTH_FLAG" = true ]; then
+                SUBACTION="auth"
+                if [ ${#raw_positionals[@]} -gt 1 ]; then
+                    COMMAND_ARGS=("${raw_positionals[@]:1}")
+                fi
+            elif [ ${#raw_positionals[@]} -ge 2 ]; then
+                local cand="${raw_positionals[1]}"
+                if [[ "$cand" =~ ^(sync|auth|status|logout)$ ]]; then
+                    SUBACTION="$cand"
+                    if [ ${#raw_positionals[@]} -gt 2 ]; then
+                        COMMAND_ARGS=("${raw_positionals[@]:2}")
+                    fi
+                else
+                    SUBACTION="sync"
+                    COMMAND_ARGS=("${raw_positionals[@]:1}")
+                fi
+            else
+                SUBACTION="sync"
             fi
             ;;
         download|search|rescue|patch|update|uninstall)

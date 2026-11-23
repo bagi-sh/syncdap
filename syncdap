@@ -36,6 +36,7 @@ main() {
         lyrics)     orchestrate_lyrics "$SUBACTION" ;;
         playlist)   orchestrate_playlist "$SUBACTION" ;;
         tags)       orchestrate_tags "$SUBACTION" ;;
+        scrobbler)  orchestrate_scrobbler "$SUBACTION" ;;
         config)     handle_config_command "${COMMAND_ARGS[@]:-}" ;;
         update)     perform_update ;;
         uninstall)  perform_uninstall ;;

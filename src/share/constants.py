@@ -1,5 +1,7 @@
 """Shared constants, supported audio formats, and ignored directories."""
 
+import os
+
 AUDIO_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav')
 
 LOSSLESS_EXTENSIONS = ('.flac', '.wav', '.aiff', '.ape', '.alac')
@@ -69,3 +71,11 @@ REMIX_PATTERNS = [
     r'\b(mashup)\b',
     r'\b(8d\s+audio)\b',
 ]
+
+# Last.fm Scrobbler API Credentials and Configuration
+DEFAULT_LASTFM_API_KEY = "968d453baa45e579a864cb6f9cb145ef"
+DEFAULT_LASTFM_API_SECRET = "a6253b76b199de52509870c4881cd2db"
+
+LASTFM_API_KEY = os.getenv("SYNCDAP_LASTFM_API_KEY", DEFAULT_LASTFM_API_KEY)
+LASTFM_API_SECRET = os.getenv("SYNCDAP_LASTFM_API_SECRET", DEFAULT_LASTFM_API_SECRET)
+

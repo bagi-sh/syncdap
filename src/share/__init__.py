@@ -91,7 +91,9 @@ from .api import (
 )
 from .config import (
     load_config,
+    get_config_path,
     get_config_value,
+    resolve_setting,
 )
 from .icons import (
     ICONS,
@@ -166,7 +168,9 @@ __all__ = [
     "resolve_online_genre",
     # config
     "load_config",
+    "get_config_path",
     "get_config_value",
+    "resolve_setting",
     # icons
     "ICONS",
     "get_icons",

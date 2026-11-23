@@ -226,7 +226,8 @@ def main():
     parser.add_argument("-n", "-d", "--dry-run", action="store_true", help="Simulate without modifying files")
     args = parser.parse_args()
 
-    sanitize_rockbox_metadata(args.root_dir, dry_run=args.dry_run)
+    root_dir = args.root_dir if args.root_dir != "." else os.environ.get("SYNCDAP_ROOT_DIR", ".")
+    sanitize_rockbox_metadata(root_dir, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

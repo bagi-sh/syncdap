@@ -18,32 +18,178 @@ MARKER=""
 TEMP_DIR=""
 RAW_URL=""
 CLEAN_URL=""
-AUDIO_FORMAT="mp3"
-THREADS=4
-SYNCED_ONLY=false
-ASSUME_YES=false
 FORCE=false
 KEEP_OLD=false
 DRY_RUN=false
 VERBOSE=false
 QUIET=false
-TARGET_ROOT="."
-FORCE_ICONS="auto"
 YTDLP_JS_ARGS=()
 
-# Load saved configuration defaults
+# ==============================================================================
+# Configuration Precedence Hierarchy:
+# 1: CLI flag (highest priority)
+# 2: Local config (~/.config/syncdap/config or -c/--config)
+# 3: Installation defaults (lowest priority)
+# ==============================================================================
+
+# Level 3: Installation defaults
+DEFAULT_AUDIO_FORMAT="mp3"
+DEFAULT_THREADS=4
+DEFAULT_SYNCED_ONLY=false
+DEFAULT_ASSUME_YES=false
+DEFAULT_TARGET_ROOT="."
+DEFAULT_FORCE_ICONS="auto"
+DEFAULT_KEEP_LOG=false
+DEFAULT_TZ_OFFSET=""
+DEFAULT_SPOTDL_PROVIDERS="youtube youtube-music soundcloud bandcamp"
+DEFAULT_SPOTDL_MAX_RETRIES=1
+DEFAULT_SPOTDL_THROTTLED_RATE="100K"
+
+# Level 1: Explicit CLI flag tracker
+CLI_SET_ROOT_DIR=false
+CLI_VAL_ROOT_DIR=""
+CLI_SET_THREADS=false
+CLI_VAL_THREADS=""
+CLI_SET_FORMAT=false
+CLI_VAL_FORMAT=""
+CLI_SET_ICONS=false
+CLI_VAL_ICONS=""
+CLI_SET_SYNCED_ONLY=false
+CLI_VAL_SYNCED_ONLY=""
+CLI_SET_ASSUME_YES=false
+CLI_VAL_ASSUME_YES=""
+CLI_SET_KEEP_LOG=false
+CLI_VAL_KEEP_LOG=""
+CLI_SET_TZ_OFFSET=false
+CLI_VAL_TZ_OFFSET=""
+
+# Working runtime variables initialized to Level 3 defaults
+AUDIO_FORMAT="$DEFAULT_AUDIO_FORMAT"
+THREADS="$DEFAULT_THREADS"
+SYNCED_ONLY="$DEFAULT_SYNCED_ONLY"
+ASSUME_YES="$DEFAULT_ASSUME_YES"
+TARGET_ROOT="$DEFAULT_TARGET_ROOT"
+FORCE_ICONS="$DEFAULT_FORCE_ICONS"
+KEEP_LOG="$DEFAULT_KEEP_LOG"
+TZ_OFFSET="$DEFAULT_TZ_OFFSET"
+SPOTDL_PROVIDERS="$DEFAULT_SPOTDL_PROVIDERS"
+SPOTDL_MAX_RETRIES="$DEFAULT_SPOTDL_MAX_RETRIES"
+SPOTDL_THROTTLED_RATE="$DEFAULT_SPOTDL_THROTTLED_RATE"
+
+# Precedence resolution function
+apply_config_precedence() {
+    # 1: CLI flag -> 2: Local config -> 3: Installation default
+    if [ "$CLI_SET_ROOT_DIR" = true ]; then
+        TARGET_ROOT="$CLI_VAL_ROOT_DIR"
+    elif [ -n "${CONFIG_ROOT_DIR:-}" ]; then
+        TARGET_ROOT="$CONFIG_ROOT_DIR"
+    else
+        TARGET_ROOT="$DEFAULT_TARGET_ROOT"
+    fi
+
+    if [ "$CLI_SET_THREADS" = true ]; then
+        THREADS="$CLI_VAL_THREADS"
+    elif [ -n "${CONFIG_THREADS:-}" ]; then
+        THREADS="$CONFIG_THREADS"
+    else
+        THREADS="$DEFAULT_THREADS"
+    fi
+
+    if [ "$CLI_SET_FORMAT" = true ]; then
+        AUDIO_FORMAT="$CLI_VAL_FORMAT"
+    elif [ -n "${CONFIG_FORMAT:-}" ]; then
+        AUDIO_FORMAT="$CONFIG_FORMAT"
+    else
+        AUDIO_FORMAT="$DEFAULT_AUDIO_FORMAT"
+    fi
+
+    if [ "$CLI_SET_ICONS" = true ]; then
+        FORCE_ICONS="$CLI_VAL_ICONS"
+    elif [ -n "${CONFIG_ICONS:-}" ]; then
+        FORCE_ICONS="$CONFIG_ICONS"
+    else
+        FORCE_ICONS="$DEFAULT_FORCE_ICONS"
+    fi
+
+    if [ "$CLI_SET_SYNCED_ONLY" = true ]; then
+        SYNCED_ONLY="$CLI_VAL_SYNCED_ONLY"
+    elif [ -n "${CONFIG_SYNCED_ONLY:-}" ]; then
+        SYNCED_ONLY="$CONFIG_SYNCED_ONLY"
+    else
+        SYNCED_ONLY="$DEFAULT_SYNCED_ONLY"
+    fi
+
+    if [ "$CLI_SET_ASSUME_YES" = true ]; then
+        ASSUME_YES="$CLI_VAL_ASSUME_YES"
+    elif [ -n "${CONFIG_ASSUME_YES:-}" ]; then
+        ASSUME_YES="$CONFIG_ASSUME_YES"
+    else
+        ASSUME_YES="$DEFAULT_ASSUME_YES"
+    fi
+
+    if [ "$CLI_SET_KEEP_LOG" = true ]; then
+        KEEP_LOG="$CLI_VAL_KEEP_LOG"
+    elif [ -n "${CONFIG_KEEP_LOG:-}" ]; then
+        KEEP_LOG="$CONFIG_KEEP_LOG"
+    else
+        KEEP_LOG="$DEFAULT_KEEP_LOG"
+    fi
+
+    if [ "$CLI_SET_TZ_OFFSET" = true ]; then
+        TZ_OFFSET="$CLI_VAL_TZ_OFFSET"
+    elif [ -n "${CONFIG_TZ_OFFSET:-}" ]; then
+        TZ_OFFSET="$CONFIG_TZ_OFFSET"
+    else
+        TZ_OFFSET="$DEFAULT_TZ_OFFSET"
+    fi
+
+    SPOTDL_PROVIDERS="${CONFIG_SPOTDL_PROVIDERS:-$DEFAULT_SPOTDL_PROVIDERS}"
+    SPOTDL_MAX_RETRIES="${CONFIG_SPOTDL_MAX_RETRIES:-$DEFAULT_SPOTDL_MAX_RETRIES}"
+    SPOTDL_THROTTLED_RATE="${CONFIG_SPOTDL_THROTTLED_RATE:-$DEFAULT_SPOTDL_THROTTLED_RATE}"
+}
+
+# Propagate runtime and CLI override flags to subprocess environments (including Python)
+export_runtime_env() {
+    export SYNCDAP_CONFIG_FILE="$CONFIG_FILE"
+    export SYNCDAP_ROOT_DIR="$TARGET_ROOT"
+    export SYNCDAP_THREADS="$THREADS"
+    export SYNCDAP_FORMAT="$AUDIO_FORMAT"
+    export SYNCDAP_ICONS="$FORCE_ICONS"
+    export SYNCDAP_SYNCED_ONLY="$SYNCED_ONLY"
+    export SYNCDAP_ASSUME_YES="$ASSUME_YES"
+    export SYNCDAP_KEEP_LOG="$KEEP_LOG"
+    export SYNCDAP_TZ_OFFSET="$TZ_OFFSET"
+
+    if [ "$CLI_SET_ROOT_DIR" = true ]; then
+        export SYNCDAP_CLI_ROOT_DIR="$TARGET_ROOT"
+    fi
+    if [ "$CLI_SET_THREADS" = true ]; then
+        export SYNCDAP_CLI_THREADS="$THREADS"
+    fi
+    if [ "$CLI_SET_FORMAT" = true ]; then
+        export SYNCDAP_CLI_FORMAT="$AUDIO_FORMAT"
+    fi
+    if [ "$CLI_SET_ICONS" = true ]; then
+        export SYNCDAP_CLI_ICONS="$FORCE_ICONS"
+    fi
+    if [ "$CLI_SET_SYNCED_ONLY" = true ]; then
+        export SYNCDAP_CLI_SYNCED_ONLY="$SYNCED_ONLY"
+    fi
+    if [ "$CLI_SET_ASSUME_YES" = true ]; then
+        export SYNCDAP_CLI_ASSUME_YES="$ASSUME_YES"
+    fi
+    if [ "$CLI_SET_KEEP_LOG" = true ]; then
+        export SYNCDAP_CLI_KEEP_LOG="$KEEP_LOG"
+    fi
+    if [ "$CLI_SET_TZ_OFFSET" = true ]; then
+        export SYNCDAP_CLI_TZ_OFFSET="$TZ_OFFSET"
+    fi
+}
+
+# Load saved configuration and resolve initial precedence
 load_config
-if [ -n "${CONFIG_THREADS:-}" ]; then THREADS="$CONFIG_THREADS"; fi
-if [ -n "${CONFIG_FORMAT:-}" ]; then AUDIO_FORMAT="$CONFIG_FORMAT"; fi
-if [ -n "${CONFIG_ROOT_DIR:-}" ]; then TARGET_ROOT="$CONFIG_ROOT_DIR"; fi
-if [ "${CONFIG_SYNCED_ONLY:-}" = "true" ]; then SYNCED_ONLY=true; fi
-if [ -n "${CONFIG_ICONS:-}" ]; then FORCE_ICONS="$CONFIG_ICONS"; fi
-if [ "${CONFIG_ASSUME_YES:-}" = "true" ]; then ASSUME_YES=true; fi
-if [ "${CONFIG_KEEP_LOG:-}" = "true" ]; then KEEP_LOG=true; fi
-if [ -n "${CONFIG_TZ_OFFSET:-}" ]; then TZ_OFFSET="$CONFIG_TZ_OFFSET"; fi
-if [ -n "${CONFIG_SPOTDL_PROVIDERS:-}" ]; then SPOTDL_PROVIDERS="$CONFIG_SPOTDL_PROVIDERS"; fi
-if [ -n "${CONFIG_SPOTDL_MAX_RETRIES:-}" ]; then SPOTDL_MAX_RETRIES="$CONFIG_SPOTDL_MAX_RETRIES"; fi
-if [ -n "${CONFIG_SPOTDL_THROTTLED_RATE:-}" ]; then SPOTDL_THROTTLED_RATE="$CONFIG_SPOTDL_THROTTLED_RATE"; fi
+apply_config_precedence
+export_runtime_env
 
 # Initialize terminal symbols & colors
 init_iconography

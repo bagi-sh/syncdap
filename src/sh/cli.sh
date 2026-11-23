@@ -338,6 +338,24 @@ parse_arguments() {
     local raw_positionals=()
     local help_requested=false
 
+    # Reset explicit CLI flag tracking for fresh argument resolution
+    CLI_SET_ROOT_DIR=false
+    CLI_VAL_ROOT_DIR=""
+    CLI_SET_THREADS=false
+    CLI_VAL_THREADS=""
+    CLI_SET_FORMAT=false
+    CLI_VAL_FORMAT=""
+    CLI_SET_ICONS=false
+    CLI_VAL_ICONS=""
+    CLI_SET_SYNCED_ONLY=false
+    CLI_VAL_SYNCED_ONLY=""
+    CLI_SET_ASSUME_YES=false
+    CLI_VAL_ASSUME_YES=""
+    CLI_SET_KEEP_LOG=false
+    CLI_VAL_KEEP_LOG=""
+    CLI_SET_TZ_OFFSET=false
+    CLI_VAL_TZ_OFFSET=""
+
     while [ $# -gt 0 ]; do
         case "$1" in
             -h|--help)
@@ -361,6 +379,8 @@ parse_arguments() {
                 shift 1
                 ;;
             -y|--yes)
+                CLI_SET_ASSUME_YES=true
+                CLI_VAL_ASSUME_YES=true
                 ASSUME_YES=true
                 shift 1
                 ;;
@@ -369,6 +389,8 @@ parse_arguments() {
                 shift 1
                 ;;
             --keep-log)
+                CLI_SET_KEEP_LOG=true
+                CLI_VAL_KEEP_LOG=true
                 KEEP_LOG=true
                 shift 1
                 ;;
@@ -381,10 +403,14 @@ parse_arguments() {
                     error_dual "Missing timezone offset" "$1 requires hours (e.g. -3 or 2)" "" "" "Pass a valid offset: syncdap scrobbler $1 -3"
                     exit 2
                 fi
+                CLI_SET_TZ_OFFSET=true
+                CLI_VAL_TZ_OFFSET="$2"
                 TZ_OFFSET="$2"
                 shift 2
                 ;;
             --synced-only)
+                CLI_SET_SYNCED_ONLY=true
+                CLI_VAL_SYNCED_ONLY=true
                 SYNCED_ONLY=true
                 shift 1
                 ;;
@@ -397,13 +423,15 @@ parse_arguments() {
                 shift 1
                 ;;
             --icons)
+                CLI_SET_ICONS=true
+                CLI_VAL_ICONS="true"
                 FORCE_ICONS="true"
-                init_iconography
                 shift 1
                 ;;
             --no-icons)
+                CLI_SET_ICONS=true
+                CLI_VAL_ICONS="false"
                 FORCE_ICONS="false"
-                init_iconography
                 shift 1
                 ;;
             -F|--format)
@@ -412,6 +440,8 @@ parse_arguments() {
                     exit 2
                 fi
                 validate_format "$2"
+                CLI_SET_FORMAT=true
+                CLI_VAL_FORMAT="$2"
                 AUDIO_FORMAT="$2"
                 shift 2
                 ;;
@@ -420,6 +450,8 @@ parse_arguments() {
                     error_dual "Missing directory path" "-r / --root-dir requires a directory path" "" "" "Pass a valid directory path: syncdap -r /mnt/dap"
                     exit 2
                 fi
+                CLI_SET_ROOT_DIR=true
+                CLI_VAL_ROOT_DIR="$2"
                 TARGET_ROOT="$2"
                 shift 2
                 ;;
@@ -428,6 +460,8 @@ parse_arguments() {
                     error_dual "Missing thread count" "-t / --threads requires a number" "" "" "Specify thread count: syncdap -t 4"
                     exit 2
                 fi
+                CLI_SET_THREADS=true
+                CLI_VAL_THREADS="$2"
                 THREADS="$2"
                 shift 2
                 ;;
@@ -455,6 +489,11 @@ parse_arguments() {
                 ;;
         esac
     done
+
+    # Resolve precedence hierarchy across CLI flags, local config, and installation defaults
+    apply_config_precedence
+    export_runtime_env
+    init_iconography
 
     # Handle help request if triggered
     if [ "$help_requested" = true ]; then

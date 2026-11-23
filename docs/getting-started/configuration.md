@@ -103,7 +103,86 @@ All settings below can be customized in `~/.config/syncdap/config`:
 
 ---
 
-## 3. Scrobbler Credentials & Security (`lastfm.conf`)
+## 3. Strict Precedence Hierarchy
+
+Every configuration parameter and preference in `syncdap` resolves through a strict 3-tier precedence hierarchy. Each tier overrides the next, and is overridden by any higher tier:
+
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Tier 1: CLI Flags (Highest Priority)                 │
+│  Explicit arguments passed on the command line (-r, -t, -F, --icons,   │
+│  --yes, --synced-only, --tz-offset, --batch-size, --threshold, etc.)    │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │ (overrides when supplied)
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Tier 2: Local User Configuration                     │
+│  Key-value definitions in active config file (~/.config/syncdap/config, │
+│  $XDG_CONFIG_HOME, or custom file passed via -c/--config)               │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │ (overrides when key exists)
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                 Tier 3: Installation Defaults (Base Tier)               │
+│  Built-in defaults hardcoded into syncdap shell and Python runtime      │
+│  (threads=4, format=mp3, root_dir=., cover_name=cover.jpg, etc.)       │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Precedence Resolution Matrix
+
+| Parameter | Tier 1: CLI Flag | Tier 2: Local Config (`config`) | Tier 3: Installation Default |
+|---|---|---|---|
+| Target music root | `-r, --root-dir <path>` | `root_dir` or `root-dir` | `.` (current directory) |
+| Worker concurrency | `-t, --threads <num>` | `threads` | `4` |
+| Audio format | `-F, --format <fmt>` | `format` | `mp3` |
+| Iconography tier | `--icons` / `--no-icons` | `icons` | `auto` (auto-detect) |
+| Non-interactive prompts | `-y, --yes` | `assume_yes` or `assume-yes` | `false` |
+| Synchronized lyrics only | `--synced-only` | `synced_only` or `synced-only`| `false` |
+| Retain scrobble log | `--keep-log` | `scrobbler_keep_log` | `false` |
+| Explicit timezone offset | `--tz-offset, --timezone`| `scrobbler_tz_offset` | `""` (detected from `#TZ`) |
+| Scrobbler batch size | `--batch-size <num>` | `scrobbler_batch_size` | `50` (Last.fm max) |
+| Cover filename | `--cover-name <name>` | `cover_name` or `cover-name` | `cover.jpg` |
+| Cover resolution | `--cover-resolution <px>`| `cover_resolution` | `600` |
+| Audit rip threshold | `-t, --threshold <sec>` | `audit_threshold` | `600.0` (10 minutes) |
+| Audit duration ratio | `--ratio <multiplier>` | `audit_ratio` | `1.5` |
+| Purge ghost files | `--clean-ghost-files` | `clean_ghost_files` | `true` |
+| ID3 standard version | `--id3-version <3\|4>` | `id3_version` | `3` (ID3v2.3 UTF-16) |
+
+### Key Normalization & Compatibility
+Configuration keys support both hyphenated (`root-dir`, `synced-only`, `clean-ghost-files`) and underscored (`root_dir`, `synced_only`, `clean_ghost_files`) styles interchangeably. Both forms are normalized during parsing and resolve identically.
+
+### Behavior Examples
+
+#### Example 1: Local Config Overrides Installation Default
+Your local configuration contains:
+```ini
+root_dir=/run/media/bagi/F695-0800/
+threads=8
+```
+Running:
+```bash
+syncdap library status
+```
+Result: Targets `/run/media/bagi/F695-0800/` with `8` threads (Tier 2 overrides Tier 3).
+
+#### Example 2: CLI Flag Overrides Local Config
+With the same local config as above, running:
+```bash
+syncdap library status -r /tmp/test_music -t 2
+```
+Result: Targets `/tmp/test_music` using `2` threads (Tier 1 explicitly overrides Tier 2).
+
+#### Example 3: Custom Configuration File with CLI Override
+Running:
+```bash
+syncdap -c ~/custom_dap.conf -t 16 library optimize
+```
+Result: Settings from `~/custom_dap.conf` take precedence over standard config, but `-t 16` overrides the thread count from `custom_dap.conf` (Tier 1 > Tier 2 custom > Tier 3).
+
+---
+
+## 4. Scrobbler Credentials & Security (`lastfm.conf`)
 
 Last.fm desktop session credentials are saved separately to:
 ```text
@@ -115,7 +194,7 @@ Last.fm desktop session credentials are saved separately to:
 
 ---
 
-## 4. DAP Hardware Mount Points
+## 5. DAP Hardware Mount Points
 
 When connecting an offline Digital Audio Player (DAP) running Rockbox:
 

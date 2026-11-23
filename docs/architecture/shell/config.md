@@ -96,8 +96,35 @@ load_config() {
 | `id3_version` | `3`, `4` | `3` | ID3v2 standard (3 = ID3v2.3 UTF-16, 4 = ID3v2.4 UTF-8) |
 | `clean_ghost_files`| `true`, `false` | `true` | Automatically remove `._*`, `Thumbs.db`, `.DS_Store` |
 | `ignored_dirs` | Comma-separated | `lost.dir,.trash...` | Excluded system and playlist directories |
-| `audit_threshold` | Seconds | `600` | Duration threshold to audit long tracks (600s = 10m) |
-| `audit_ratio` | Float | `1.5` | Ratio multiplier to classify continuous rips |
+---
+
+## 4. Precedence Resolution Mechanics
+
+Configuration resolution enforces strict priority across all components:
+1. **Tier 1: CLI Flags:** When a flag is parsed (`parse_arguments` in `cli.sh`), `CLI_SET_<PARAM>` is flagged `true`. This value takes supreme precedence.
+2. **Tier 2: Local Configuration:** Parsed by `load_config` from the resolved `$CONFIG_FILE`. Overrides Tier 3 when keys are defined.
+3. **Tier 3: Installation Defaults:** Initialized in `common.sh` (`DEFAULT_*`).
+
+### Resolution Function (`apply_config_precedence`)
+```bash
+apply_config_precedence() {
+    # 1: CLI flag -> 2: Local config -> 3: Installation default
+    if [ "$CLI_SET_ROOT_DIR" = true ]; then
+        TARGET_ROOT="$CLI_VAL_ROOT_DIR"
+    elif [ -n "${CONFIG_ROOT_DIR:-}" ]; then
+        TARGET_ROOT="$CONFIG_ROOT_DIR"
+    else
+        TARGET_ROOT="$DEFAULT_TARGET_ROOT"
+    fi
+    ...
+}
+```
+
+### Subprocess Environment Propagation (`export_runtime_env`)
+To ensure Python engines respect the same precedence rules, the shell coordinator exports:
+- `SYNCDAP_CONFIG_FILE`: Custom or active config file path (consumed by `get_config_path()`).
+- `SYNCDAP_ROOT_DIR`, `SYNCDAP_THREADS`, `SYNCDAP_FORMAT`, etc.: Active resolved settings.
+- `SYNCDAP_CLI_<PARAM>`: Explicit override markers indicating Tier 1 CLI activation to Python `resolve_setting(...)`.
 | `scrobbler_keep_log`| `true`, `false` | `false` | Keep `.scrobbler.log` on DAP after sync |
 | `scrobbler_tz_offset`| Integer / Float | *(auto)* | Explicit timezone offset override (e.g. `-3`) |
 | `scrobbler_batch_size`| Integer (`1`–`50`) | `50` | Maximum tracks submitted per Last.fm batch |

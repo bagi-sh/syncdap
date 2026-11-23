@@ -123,7 +123,7 @@ def main():
 
     mode = sys.argv[1].lower()
     dirs_file = sys.argv[2]
-    threads = int(sys.argv[3]) if len(sys.argv) > 3 else 4
+    threads = int(sys.argv[3]) if len(sys.argv) > 3 else int(os.environ.get("SYNCDAP_THREADS", 4))
 
     album_dirs = []
     if os.path.exists(dirs_file):

@@ -67,15 +67,56 @@ def handle_logout(args: argparse.Namespace) -> int:
 
 
 def resolve_tz_offset(cli_arg: float | None) -> float | None:
+    """Resolve timezone offset enforcing strict precedence:
+    1: CLI flag (--tz-offset)
+    2: Environment override (SYNCDAP_CLI_TZ_OFFSET / SYNCDAP_TZ_OFFSET)
+    3: Local configuration file (scrobbler_tz_offset)
+    4: Log header (#TZ) / None
+    """
     if cli_arg is not None:
         return cli_arg
-    cfg_tz = get_config_value("scrobbler.tz_offset") or get_config_value("scrobbler.timezone")
+    env_tz = os.environ.get("SYNCDAP_CLI_TZ_OFFSET") or os.environ.get("SYNCDAP_TZ_OFFSET")
+    if env_tz:
+        try:
+            return float(env_tz)
+        except ValueError:
+            pass
+    cfg_tz = (
+        get_config_value("scrobbler_tz_offset")
+        or get_config_value("scrobbler-tz-offset")
+        or get_config_value("scrobbler.tz_offset")
+        or get_config_value("scrobbler.timezone")
+    )
     if cfg_tz:
         try:
             return float(cfg_tz)
         except ValueError:
             pass
     return None
+
+
+def resolve_batch_size(cli_arg: int | None) -> int:
+    """Resolve submission batch size enforcing strict precedence:
+    1: CLI flag (--batch-size)
+    2: Environment override (SYNCDAP_CLI_SCROBBLER_BATCH_SIZE)
+    3: Local configuration file (scrobbler_batch_size)
+    4: Installation default (SCROBBLER_BATCH_SIZE = 50)
+    """
+    if cli_arg is not None:
+        return max(1, min(50, cli_arg))
+    env_bs = os.environ.get("SYNCDAP_CLI_SCROBBLER_BATCH_SIZE") or os.environ.get("SYNCDAP_SCROBBLER_BATCH_SIZE")
+    if env_bs:
+        try:
+            return max(1, min(50, int(env_bs)))
+        except ValueError:
+            pass
+    cfg_bs = get_config_value("scrobbler_batch_size") or get_config_value("scrobbler-batch-size")
+    if cfg_bs:
+        try:
+            return max(1, min(50, int(cfg_bs)))
+        except ValueError:
+            pass
+    return SCROBBLER_BATCH_SIZE
 
 
 def handle_status(args: argparse.Namespace) -> int:
@@ -306,7 +347,8 @@ def handle_sync(args: argparse.Namespace) -> int:
 
     try:
         session_key = session.get("key") or session.get("session_key", "")
-        sub_res = scrobble_tracks(session_key, valid_tracks)
+        batch_size = resolve_batch_size(getattr(args, "batch_size", None))
+        sub_res = scrobble_tracks(session_key, valid_tracks, batch_size=batch_size)
     except LastFmError as e:
         print(
             format_error_dual(
@@ -422,6 +464,13 @@ def main() -> int:
         help="Explicit UTC offset hours (e.g. -3) to overwrite log file #TZ",
     )
     parser.add_argument(
+        "--batch-size",
+        dest="batch_size",
+        type=int,
+        default=None,
+        help="Submission batch size (1-50, precedence: CLI -> config -> 50)",
+    )
+    parser.add_argument(
         "--keep-log",
         action="store_true",
         help="Retain .scrobbler.log on the DAP after successful upload",
@@ -434,6 +483,9 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+
+    if args.config:
+        os.environ["SYNCDAP_CONFIG_FILE"] = str(Path(args.config).expanduser().resolve())
 
     if args.action == "auth":
         return handle_auth(args)

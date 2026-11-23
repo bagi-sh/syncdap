@@ -115,14 +115,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Audit library tracks >10 min to detect accidental full-album rips."
     )
-    parser.add_argument("-r", "--root-dir", default=".", help="Root music library path to scan.")
+    parser.add_argument("-r", "--root-dir", default=None, help="Root music library path to scan (default: .).")
     parser.add_argument(
-        "-t", "--threshold", type=float, default=AUDIT_THRESHOLD_SECONDS,
-        help=f"Duration threshold in seconds (default: {AUDIT_THRESHOLD_SECONDS:.0f} = {AUDIT_THRESHOLD_SECONDS/60:.0f} min)."
+        "-t", "--threshold", type=float, default=None,
+        help=f"Duration threshold in seconds (precedence: CLI -> local config -> {AUDIT_THRESHOLD_SECONDS:.0f}s).",
     )
     parser.add_argument(
-        "--ratio", type=float, default=AUDIT_RATIO_THRESHOLD,
-        help=f"Duration ratio threshold to classify full-album rips (default: {AUDIT_RATIO_THRESHOLD}x)."
+        "--ratio", type=float, default=None,
+        help=f"Duration ratio threshold to classify full-album rips (precedence: CLI -> local config -> {AUDIT_RATIO_THRESHOLD}x).",
     )
     parser.add_argument("--json", action="store_true", help="Output suspect file paths as JSON array.")
     parser.add_argument(
@@ -131,12 +131,17 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # Precedence: 1. CLI flag -> 2. Environment / local config -> 3. Installation default
+    threshold = args.threshold if args.threshold is not None else AUDIT_THRESHOLD_SECONDS
+    ratio = args.ratio if args.ratio is not None else AUDIT_RATIO_THRESHOLD
+    root_dir = args.root_dir if args.root_dir is not None else os.environ.get("SYNCDAP_ROOT_DIR", ".")
+
     suspect_paths, verified_count, suspect_count, unknown_count = audit_long_tracks(
-        args.root_dir,
-        args.threshold,
+        root_dir,
+        threshold,
         json_output=args.json,
         auto_split=args.auto_split,
-        ratio_threshold=args.ratio,
+        ratio_threshold=ratio,
     )
 
     if args.json:

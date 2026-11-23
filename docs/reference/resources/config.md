@@ -79,4 +79,13 @@ syncdap config get format
 | **Network** | `spotdl_providers` | Space-separated | `youtube youtube-music soundcloud bandcamp` | Priority audio providers for spotDL |
 | **Network** | `spotdl_max_retries`| Integer | `1` | Max download retries in spotDL |
 | **Network** | `spotdl_throttled_rate`| Rate string | `100K` | Rate throttling argument for yt-dlp |
-| **Network** | `api_timeout` | Seconds | `8` | Default HTTP request timeout for metadata APIs |
+---
+
+## 4. Strict Precedence Hierarchy
+
+Configuration and preference values follow a strict 3-tier precedence rule:
+1. **Tier 1: CLI Flags** (highest priority) — Overrides everything when specified on the command line.
+2. **Tier 2: Local Configuration** — Loaded from active config file (`~/.config/syncdap/config` or `-c/--config`). Overrides installation defaults.
+3. **Tier 3: Installation Defaults** (lowest priority) — Built-in hardcoded fallback values.
+
+Keys support both hyphenated (`root-dir`, `synced-only`) and underscored (`root_dir`, `synced_only`) formatting interchangeably. Custom config files passed via `-c/--config` take precedence over default user configuration files, while CLI flags retain supreme priority over custom configuration files.

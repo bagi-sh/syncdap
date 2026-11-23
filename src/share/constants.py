@@ -1,7 +1,7 @@
 """Shared constants, supported audio formats, and user-configurable settings."""
 
 import os
-from .config import get_config_value
+from .config import get_config_value, resolve_setting
 
 AUDIO_EXTENSIONS = ('.mp3', '.flac', '.m4a', '.ogg', '.opus', '.wav')
 
@@ -9,74 +9,109 @@ LOSSLESS_EXTENSIONS = ('.flac', '.wav', '.aiff', '.ape', '.alac')
 LOSSY_EXTENSIONS = ('.m4a', '.opus', '.ogg', '.mp3')
 
 # Standard cover art filenames recognized across modules and players
-_cfg_covers = get_config_value("cover_filenames")
-if _cfg_covers:
-    COVER_FILENAMES = tuple(x.strip() for x in _cfg_covers.split(",") if x.strip())
-else:
-    COVER_FILENAMES = ('cover.jpg', 'cover.jpeg', 'cover.png', 'folder.jpg', 'folder.jpeg', 'folder.png')
+_raw_covers = resolve_setting(
+    env_vars=["SYNCDAP_CLI_COVER_FILENAMES", "SYNCDAP_COVER_FILENAMES"],
+    config_keys=["cover_filenames", "cover-filenames"],
+    default="cover.jpg,cover.jpeg,cover.png,folder.jpg,folder.jpeg,folder.png",
+    val_type=str,
+)
+COVER_FILENAMES = tuple(x.strip() for x in _raw_covers.split(",") if x.strip())
 
-COVER_NAME = get_config_value("cover_name", "cover.jpg") or "cover.jpg"
-try:
-    COVER_RESOLUTION = int(get_config_value("cover_resolution", "600") or 600)
-except (ValueError, TypeError):
-    COVER_RESOLUTION = 600
+COVER_NAME = resolve_setting(
+    env_vars=["SYNCDAP_CLI_COVER_NAME", "SYNCDAP_COVER_NAME"],
+    config_keys=["cover_name", "cover-name"],
+    default="cover.jpg",
+    val_type=str,
+)
+
+COVER_RESOLUTION = resolve_setting(
+    env_vars=["SYNCDAP_CLI_COVER_RESOLUTION", "SYNCDAP_COVER_RESOLUTION"],
+    config_keys=["cover_resolution", "cover-resolution"],
+    default=600,
+    val_type=int,
+)
 
 # System, filesystem, and player directories to ignore during library traversal
-_cfg_ignored = get_config_value("ignored_dirs")
-if _cfg_ignored:
-    IGNORED_DIRS = {x.strip().lower() for x in _cfg_ignored.split(",") if x.strip()}
-else:
-    IGNORED_DIRS = {
-        'lost.dir',
-        '.trash-1000',
-        '.trash',
-        'system volume information',
-        '.android_secure',
-        '.rockbox',
-        'backup',
-        '__pycache__',
-        '.git',
-        'playlists',
-        'lib',
-    }
+_raw_ignored = resolve_setting(
+    env_vars=["SYNCDAP_CLI_IGNORED_DIRS", "SYNCDAP_IGNORED_DIRS"],
+    config_keys=["ignored_dirs", "ignored-dirs"],
+    default="lost.dir,.trash-1000,.trash,system volume information,.android_secure,.rockbox,backup,__pycache__,.git,playlists,lib",
+    val_type=str,
+)
+IGNORED_DIRS = {x.strip().lower() for x in _raw_ignored.split(",") if x.strip()}
 
 # Library audit and full-album rip detection thresholds
-try:
-    AUDIT_THRESHOLD_SECONDS = float(get_config_value("audit_threshold", "600") or 600.0)
-except (ValueError, TypeError):
-    AUDIT_THRESHOLD_SECONDS = 600.0
+AUDIT_THRESHOLD_SECONDS = resolve_setting(
+    env_vars=["SYNCDAP_CLI_AUDIT_THRESHOLD", "SYNCDAP_AUDIT_THRESHOLD"],
+    config_keys=["audit_threshold", "audit-threshold"],
+    default=600.0,
+    val_type=float,
+)
 
-try:
-    AUDIT_RATIO_THRESHOLD = float(get_config_value("audit_ratio", "1.5") or 1.5)
-except (ValueError, TypeError):
-    AUDIT_RATIO_THRESHOLD = 1.5
+AUDIT_RATIO_THRESHOLD = resolve_setting(
+    env_vars=["SYNCDAP_CLI_AUDIT_RATIO", "SYNCDAP_AUDIT_RATIO"],
+    config_keys=["audit_ratio", "audit-ratio"],
+    default=1.5,
+    val_type=float,
+)
 
 # Network API timeouts and Last.fm scrobbler batching
-try:
-    API_TIMEOUT = int(get_config_value("api_timeout", "8") or 8)
-except (ValueError, TypeError):
-    API_TIMEOUT = 8
+API_TIMEOUT = resolve_setting(
+    env_vars=["SYNCDAP_CLI_API_TIMEOUT", "SYNCDAP_API_TIMEOUT"],
+    config_keys=["api_timeout", "api-timeout"],
+    default=8,
+    val_type=int,
+)
 
-try:
-    SCROBBLER_BATCH_SIZE = min(50, max(1, int(get_config_value("scrobbler_batch_size", "50") or 50)))
-except (ValueError, TypeError):
-    SCROBBLER_BATCH_SIZE = 50
+SCROBBLER_BATCH_SIZE = min(
+    50,
+    max(
+        1,
+        resolve_setting(
+            env_vars=["SYNCDAP_CLI_SCROBBLER_BATCH_SIZE", "SYNCDAP_SCROBBLER_BATCH_SIZE"],
+            config_keys=["scrobbler_batch_size", "scrobbler-batch-size"],
+            default=50,
+            val_type=int,
+        ),
+    ),
+)
 
 # Hardware & Tagging standardization
-try:
-    ID3_VERSION = int(get_config_value("id3_version", "3") or 3)
-except (ValueError, TypeError):
-    ID3_VERSION = 3
+ID3_VERSION = resolve_setting(
+    env_vars=["SYNCDAP_CLI_ID3_VERSION", "SYNCDAP_ID3_VERSION"],
+    config_keys=["id3_version", "id3-version"],
+    default=3,
+    val_type=int,
+)
 
-CLEAN_GHOST_FILES = str(get_config_value("clean_ghost_files", "true")).lower() in ("true", "1", "yes")
+CLEAN_GHOST_FILES = resolve_setting(
+    env_vars=["SYNCDAP_CLI_CLEAN_GHOST_FILES", "SYNCDAP_CLEAN_GHOST_FILES"],
+    config_keys=["clean_ghost_files", "clean-ghost-files"],
+    default=True,
+    val_type=bool,
+)
 
 # Download provider preferences
-SPOTDL_AUDIO_PROVIDERS = get_config_value("spotdl_providers", "youtube youtube-music soundcloud bandcamp") or "youtube youtube-music soundcloud bandcamp"
-try:
-    SPOTDL_MAX_RETRIES = int(get_config_value("spotdl_max_retries", "1") or 1)
-except (ValueError, TypeError):
-    SPOTDL_MAX_RETRIES = 1
-SPOTDL_THROTTLED_RATE = get_config_value("spotdl_throttled_rate", "100K") or "100K"
+SPOTDL_AUDIO_PROVIDERS = resolve_setting(
+    env_vars=["SYNCDAP_CLI_SPOTDL_PROVIDERS", "SYNCDAP_SPOTDL_PROVIDERS"],
+    config_keys=["spotdl_providers", "spotdl-providers"],
+    default="youtube youtube-music soundcloud bandcamp",
+    val_type=str,
+)
+
+SPOTDL_MAX_RETRIES = resolve_setting(
+    env_vars=["SYNCDAP_CLI_SPOTDL_MAX_RETRIES", "SYNCDAP_SPOTDL_MAX_RETRIES"],
+    config_keys=["spotdl_max_retries", "spotdl-max-retries"],
+    default=1,
+    val_type=int,
+)
+
+SPOTDL_THROTTLED_RATE = resolve_setting(
+    env_vars=["SYNCDAP_CLI_SPOTDL_THROTTLED_RATE", "SYNCDAP_SPOTDL_THROTTLED_RATE"],
+    config_keys=["spotdl_throttled_rate", "spotdl-throttled-rate"],
+    default="100K",
+    val_type=str,
+)
 
 # Regex patterns for download filtering and candidate ranking
 FULL_ALBUM_PATTERNS = [

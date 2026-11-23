@@ -4,17 +4,45 @@
 # Purpose: Configuration management for syncdap (~/.config/syncdap/config)
 # ==============================================================================
 
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/syncdap"
-if ! mkdir -p "$CONFIG_DIR" 2>/dev/null; then
-    CONFIG_DIR="$PWD/.config/syncdap"
+if [ -n "${SYNCDAP_CONFIG_FILE:-}" ] && [ -f "$SYNCDAP_CONFIG_FILE" ]; then
+    CONFIG_FILE="$SYNCDAP_CONFIG_FILE"
+    CONFIG_DIR="$(dirname "$CONFIG_FILE")"
+else
+    CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/syncdap"
+    if ! mkdir -p "$CONFIG_DIR" 2>/dev/null; then
+        CONFIG_DIR="$PWD/.config/syncdap"
+    fi
+    CONFIG_FILE="$CONFIG_DIR/config"
 fi
-CONFIG_FILE="$CONFIG_DIR/config"
 
 load_config() {
+    # Reset config cache to allow clean reloading
+    CONFIG_ICONS=""
+    CONFIG_THREADS=""
+    CONFIG_FORMAT=""
+    CONFIG_ROOT_DIR=""
+    CONFIG_SYNCED_ONLY=""
+    CONFIG_COVER_NAME=""
+    CONFIG_COVER_RESOLUTION=""
+    CONFIG_COVER_FILENAMES=""
+    CONFIG_AUDIT_THRESHOLD=""
+    CONFIG_AUDIT_RATIO=""
+    CONFIG_CLEAN_GHOST_FILES=""
+    CONFIG_KEEP_LOG=""
+    CONFIG_TZ_OFFSET=""
+    CONFIG_SCROBBLER_BATCH_SIZE=""
+    CONFIG_SPOTDL_PROVIDERS=""
+    CONFIG_SPOTDL_MAX_RETRIES=""
+    CONFIG_SPOTDL_THROTTLED_RATE=""
+    CONFIG_API_TIMEOUT=""
+    CONFIG_ID3_VERSION=""
+    CONFIG_ASSUME_YES=""
+    CONFIG_IGNORED_DIRS=""
+
     if [ -f "$CONFIG_FILE" ]; then
         while IFS='=' read -r key val || [ -n "$key" ]; do
-            # Trim whitespace
-            key="$(echo "$key" | tr -d '[:space:]')"
+            # Trim whitespace and normalize hyphen to underscore
+            key="$(echo "$key" | tr -d '[:space:]' | tr '-' '_')"
             val="$(echo "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
             # Ignore comments and empty lines
             [[ "$key" =~ ^#.*$ ]] && continue
@@ -49,22 +77,28 @@ load_config() {
 
 get_config() {
     local target_key="$1"
+    local alt_key
+    alt_key="$(echo "$target_key" | tr '_' '-')"
     if [ -f "$CONFIG_FILE" ]; then
-        grep "^${target_key}=" "$CONFIG_FILE" 2>/dev/null | head -n 1 | cut -d'=' -f2-
+        grep -E "^(${target_key}|${alt_key})=" "$CONFIG_FILE" 2>/dev/null | head -n 1 | cut -d'=' -f2-
     fi
 }
 
 set_config() {
     local key="$1"
     local val="$2"
+    local norm_key
+    norm_key="$(echo "$key" | tr '-' '_')"
+    local alt_key
+    alt_key="$(echo "$norm_key" | tr '_' '-')"
 
     mkdir -p "$CONFIG_DIR"
     touch "$CONFIG_FILE"
 
-    if grep -q "^${key}=" "$CONFIG_FILE" 2>/dev/null; then
-        sed -i "s|^${key}=.*|${key}=${val}|" "$CONFIG_FILE"
+    if grep -qE "^(${norm_key}|${alt_key})=" "$CONFIG_FILE" 2>/dev/null; then
+        sed -i -E "s|^(${norm_key}|${alt_key})=.*|${norm_key}=${val}|" "$CONFIG_FILE"
     else
-        echo "${key}=${val}" >> "$CONFIG_FILE"
+        echo "${norm_key}=${val}" >> "$CONFIG_FILE"
     fi
 }
 

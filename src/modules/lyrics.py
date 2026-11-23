@@ -70,8 +70,8 @@ def main():
         sys.exit(2)
 
     dirs_file = sys.argv[1]
-    threads = int(sys.argv[2]) if len(sys.argv) > 2 else 4
-    synced_only = sys.argv[3].lower() == 'true' if len(sys.argv) > 3 else False
+    threads = int(sys.argv[2]) if len(sys.argv) > 2 else int(os.environ.get("SYNCDAP_THREADS", 4))
+    synced_only = sys.argv[3].lower() == 'true' if len(sys.argv) > 3 else (os.environ.get("SYNCDAP_SYNCED_ONLY", "false").lower() == "true")
     do_embed = '--embed' in sys.argv or (len(sys.argv) > 4 and sys.argv[4].lower() == 'true')
 
     target_dirs = []

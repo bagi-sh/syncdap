@@ -174,7 +174,11 @@ perform_update() {
     if [ "$QUIET" = false ]; then
         echo -e "${ICON_INFO} Checking for syncdap updates..." >&2
     fi
-    if [ -f "$SCRIPT_DIR/install.sh" ]; then
+    if [ -n "${SYNCDAP_PYTHON:-}" ] || (command -v uv &>/dev/null && uv tool list 2>/dev/null | grep -q syncdap); then
+        echo -e "${ICON_INFO} Updating rolling release via uv tool..." >&2
+        uv tool upgrade syncdap 2>/dev/null || uv tool install --force git+https://github.com/bagi-sh/syncdap.git
+        exit 0
+    elif [ -f "$SCRIPT_DIR/install.sh" ]; then
         bash "$SCRIPT_DIR/install.sh" --update
     elif [ -d "$SCRIPT_DIR/.git" ]; then
         git -C "$SCRIPT_DIR" pull --rebase

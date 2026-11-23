@@ -203,16 +203,51 @@ build_python_cache() {
     fi
 }
 
-# --- REPOSITORY UPDATE (GIT PULL) ---
-update_git_source() {
-    local target_repo="$1"
-    if [ -d "$target_repo/.git" ]; then
-        echo -e "${CYAN}📥 Pulling newest commits from Git repository in $target_repo...${RESET}"
-        if git -C "$target_repo" pull --rebase 2>&1; then
-            echo -e "${GREEN}✅ Repository updated to latest version.${RESET}"
-        else
-            echo -e "${YELLOW}⚠️ Notice: Git pull failed (offline or local changes). Proceeding with current files.${RESET}"
-        fi
+# Default git repository URL for rolling releases
+DEFAULT_REPO_URL="https://github.com/bagi-sh/syncdap.git"
+
+# --- ROLLING RELEASE UPDATE (SHALLOW EPHEMERAL FETCH) ---
+update_rolling_release() {
+    local repo_url="${SYNCDAP_REPO_URL:-$DEFAULT_REPO_URL}"
+    if [ -f "$INSTALL_DIR/.git_remote" ]; then
+        local saved_url
+        saved_url="$(cat "$INSTALL_DIR/.git_remote" | tr -d '[:space:]')"
+        [ -n "$saved_url" ] && repo_url="$saved_url"
+    fi
+
+    # Normalize SSH to HTTPS for automated pulls without SSH credentials
+    if [[ "$repo_url" =~ ^git@github\.com:(.*)$ ]]; then
+        repo_url="https://github.com/${BASH_REMATCH[1]}"
+    fi
+
+    echo -e "${CYAN}📥 Pulling latest bleeding-edge rolling release from ${repo_url}...${RESET}"
+    local tmp_dir
+    tmp_dir="$(mktemp -d -t syncdap-update-XXXXXX)"
+    trap 'rm -rf "$tmp_dir"' RETURN
+
+    if git clone --depth 1 --quiet "$repo_url" "$tmp_dir/clone" 2>/dev/null; then
+        local new_rev
+        new_rev="$(git -C "$tmp_dir/clone" rev-parse --short HEAD 2>/dev/null || echo 'latest')"
+
+        # Sync runtime files into INSTALL_DIR (excluding .git and docs)
+        cp -r "$tmp_dir/clone/src" "$INSTALL_DIR/"
+        cp "$tmp_dir/clone/syncdap" "$INSTALL_DIR/"
+        cp "$tmp_dir/clone/install.sh" "$INSTALL_DIR/"
+        cp "$tmp_dir/clone/pyproject.toml" "$INSTALL_DIR/" 2>/dev/null || true
+        cp "$tmp_dir/clone/README.md" "$INSTALL_DIR/"
+        cp "$tmp_dir/clone/LICENSE" "$INSTALL_DIR/"
+        echo "$new_rev" > "$INSTALL_DIR/.version"
+        echo "$repo_url" > "$INSTALL_DIR/.git_remote"
+        rm -rf "$INSTALL_DIR/.git" 2>/dev/null || true
+
+        chmod +x "$INSTALL_DIR/syncdap" "$INSTALL_DIR/install.sh"
+        find "$INSTALL_DIR/src/sh" -name "*.sh" -exec chmod +x {} + 2>/dev/null || true
+
+        build_python_cache
+        echo -e "${GREEN}✅ syncdap updated to rolling release revision ${BOLD}${new_rev}${RESET}.${RESET}"
+    else
+        echo -e "${YELLOW}⚠️ Notice: Update check failed (network unavailable or repository unreachable).${RESET}"
+        echo "Keeping currently installed version."
     fi
 }
 
@@ -223,9 +258,11 @@ echo "Destination Directory: $INSTALL_DIR"
 echo "Binary Launcher:       $BIN_DIR/syncdap"
 echo "--------------------------------------------------"
 
-# If running from a git clone and update is requested (or running again), pull git first
-if [ -d "$SCRIPT_DIR/.git" ]; then
-    update_git_source "$SCRIPT_DIR"
+if [ "$INSTALL_MODE" = "update" ]; then
+    ensure_system_dependencies
+    ensure_uv
+    update_rolling_release
+    exit 0
 fi
 
 ensure_system_dependencies
@@ -239,33 +276,43 @@ else
     mkdir -p "$INSTALL_DIR" "$BIN_DIR"
 fi
 
-# Copy codebase if script is running from outside the destination directory
-if [ "$SCRIPT_DIR" != "$INSTALL_DIR" ]; then
-    echo -e "${CYAN}📦 Installing project files to $INSTALL_DIR...${RESET}"
-
-    # Remove existing files except .git if already present in target
-    if [ -d "$INSTALL_DIR" ]; then
-        find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} + 2>/dev/null || true
-    fi
-
-    # Copy code tree
-    cp -r "$SCRIPT_DIR/src" "$INSTALL_DIR/"
-    cp "$SCRIPT_DIR/syncdap" "$INSTALL_DIR/"
-    cp "$SCRIPT_DIR/install.sh" "$INSTALL_DIR/"
-    cp "$SCRIPT_DIR/README.md" "$INSTALL_DIR/"
-    cp "$SCRIPT_DIR/LICENSE" "$INSTALL_DIR/"
-    [ -f "$SCRIPT_DIR/.gitignore" ] && cp "$SCRIPT_DIR/.gitignore" "$INSTALL_DIR/"
-
-    # Preserve .git repository in destination so updates work after deleting original clone
-    if [ -d "$SCRIPT_DIR/.git" ]; then
-        echo -e "${CYAN}🔗 Preserving Git repository metadata for seamless future updates...${RESET}"
-        rm -rf "$INSTALL_DIR/.git"
-        cp -a "$SCRIPT_DIR/.git" "$INSTALL_DIR/"
-    fi
-else
-    # SCRIPT_DIR is already INSTALL_DIR (e.g. syncdap --update was called)
-    update_git_source "$INSTALL_DIR"
+# Detect if source files exist locally or if running via curl pipe
+SOURCE_DIR="$SCRIPT_DIR"
+TEMP_CLONE=""
+if [ ! -f "$SCRIPT_DIR/syncdap" ] || [ ! -d "$SCRIPT_DIR/src" ]; then
+    echo -e "${CYAN}📥 Fetching latest syncdap release from GitHub...${RESET}"
+    TEMP_CLONE="$(mktemp -d -t syncdap-install-XXXXXX)"
+    git clone --depth 1 --quiet "$DEFAULT_REPO_URL" "$TEMP_CLONE/repo"
+    SOURCE_DIR="$TEMP_CLONE/repo"
 fi
+
+echo -e "${CYAN}📦 Installing lean runtime files to $INSTALL_DIR...${RESET}"
+
+# Remove previous files in target (clean upgrade)
+if [ -d "$INSTALL_DIR" ]; then
+    find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+fi
+
+# Copy only runtime code (zero .git and zero docs bloat)
+cp -r "$SOURCE_DIR/src" "$INSTALL_DIR/"
+cp "$SOURCE_DIR/syncdap" "$INSTALL_DIR/"
+cp "$SOURCE_DIR/install.sh" "$INSTALL_DIR/"
+cp "$SOURCE_DIR/pyproject.toml" "$INSTALL_DIR/" 2>/dev/null || true
+cp "$SOURCE_DIR/README.md" "$INSTALL_DIR/"
+cp "$SOURCE_DIR/LICENSE" "$INSTALL_DIR/"
+
+# Record version and remote metadata for rolling release updates
+if [ -d "$SOURCE_DIR/.git" ]; then
+    git -C "$SOURCE_DIR" rev-parse --short HEAD > "$INSTALL_DIR/.version" 2>/dev/null || true
+    remote_origin="$(git -C "$SOURCE_DIR" config --get remote.origin.url 2>/dev/null || true)"
+    echo "${remote_origin:-$DEFAULT_REPO_URL}" > "$INSTALL_DIR/.git_remote"
+else
+    echo "latest" > "$INSTALL_DIR/.version"
+    echo "$DEFAULT_REPO_URL" > "$INSTALL_DIR/.git_remote"
+fi
+
+# Clean up temporary clone if used
+[ -n "$TEMP_CLONE" ] && rm -rf "$TEMP_CLONE"
 
 # Set executable permissions
 echo -e "${CYAN}🔒 Setting permissions...${RESET}"

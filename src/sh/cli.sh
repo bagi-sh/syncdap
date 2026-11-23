@@ -309,7 +309,15 @@ EOF
 }
 
 show_version() {
-    echo "syncdap ${SYNCDAP_VERSION:-2.0.0}"
+    local rev=""
+    if [ -f "${SCRIPT_DIR:-}/.version" ]; then
+        rev=" ($(cat "${SCRIPT_DIR}/.version" | tr -d '[:space:]'))"
+    elif [ -d "${SCRIPT_DIR:-}/.git" ]; then
+        local git_rev
+        git_rev="$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || true)"
+        [ -n "$git_rev" ] && rev=" ($git_rev)"
+    fi
+    echo "syncdap ${SYNCDAP_VERSION:-2.0.0}${rev}"
 }
 
 # Subcommand state variables

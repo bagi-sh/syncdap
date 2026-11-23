@@ -47,6 +47,7 @@ Commands follow a strict, predictable hierarchy: `syncdap <resource> <action> [t
 | **`covers`**  | Artwork management (`optimize`, `embed`) | `syncdap covers optimize`<br>`syncdap covers embed` |
 | **`lyrics`**  | Synchronized `.lrc` maintenance (`fetch`, `embed`) | `syncdap lyrics fetch --synced-only` |
 | **`tags`**    | Metadata normalization (`fix`, `genres`, `romaji`) | `syncdap tags fix`<br>`syncdap tags genres` |
+| **`scrobbler`**| Rockbox `.scrobbler.log` sync & Last.fm management | `syncdap scrobbler status`<br>`syncdap scrobbler -r /mnt/dap` |
 | **`config`**  | Persistent settings inspection and updates | `syncdap config icons=true`<br>`syncdap config list` |
 
 ---

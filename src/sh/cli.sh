@@ -61,6 +61,7 @@ Actions:
   optimize    Execute complete Rockbox/DAP library optimization pipeline
   patch [fmt] Transcode or upgrade entire library to target format
   fix         Unify ALBUM/ALBUMARTIST tags and clean ghost files
+  organize    Restructure library into Music/{Artist}/{Album}/{track} {title} - {artist}.ext
   romaji      Transliterate Japanese tags and paths across library
 
 Options:
@@ -546,8 +547,8 @@ parse_arguments() {
             # Validate actions per resource
             case "$SUBCOMMAND" in
                 library)
-                    if [[ ! "$SUBACTION" =~ ^(status|audit|dedup|optimize|patch|fix|romaji)$ ]]; then
-                        error_dual "Invalid action '$SUBACTION' for 'library'" "Supported actions: status, audit, dedup, optimize, patch, fix, romaji" "syncdap library $SUBACTION" "" "Run 'syncdap library --help' for available actions."
+                    if [[ ! "$SUBACTION" =~ ^(status|audit|dedup|optimize|patch|fix|organize|romaji)$ ]]; then
+                        error_dual "Invalid action '$SUBACTION' for 'library'" "Supported actions: status, audit, dedup, optimize, patch, fix, organize, romaji" "syncdap library $SUBACTION" "" "Run 'syncdap library --help' for available actions."
                         exit 2
                     fi
                     ;;

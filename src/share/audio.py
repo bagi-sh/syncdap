@@ -110,16 +110,36 @@ def read_audio_metadata(file_path: str, fallback_to_filename: bool = True) -> di
                     if len(tr) > 1:
                         meta['total_tracks'] = tr[1]
 
+            elif ext == '.m4a' and audio.tags:
+                tags = audio.tags
+                meta['title']        = clean_string(tags.get('\xa9nam', tags.get('title', [''])))
+                meta['artist']       = clean_string(tags.get('\xa9ART', tags.get('artist', [''])))
+                meta['album']        = clean_string(tags.get('\xa9alb', tags.get('album', [''])))
+                meta['album_artist'] = clean_string(tags.get('aART', tags.get('albumartist', [''])))
+                meta['genre']        = clean_string(tags.get('\xa9gen', tags.get('genre', [''])))
+                meta['year']         = clean_string(tags.get('\xa9day', tags.get('date', [''])))[:4]
+
+                tr_val = tags.get('trkn', [(0, 0)])[0]
+                if isinstance(tr_val, (tuple, list)):
+                    meta['track_num'] = str(tr_val[0]) if tr_val[0] else ''
+                    if len(tr_val) > 1 and tr_val[1]:
+                        meta['total_tracks'] = str(tr_val[1])
+
+                covs = tags.get('covr', [])
+                if covs and not meta['cover_data']:
+                    meta['cover_data'] = bytes(covs[0])
+                    meta['cover_mime'] = 'image/png' if getattr(covs[0], 'imageformat', None) == MP4Cover.FORMAT_PNG else 'image/jpeg'
+
             elif audio.tags:
                 tags = audio.tags
-                meta['title']        = clean_string(tags.get('title',       tags.get('\xa9nam', [''])))
-                meta['artist']       = clean_string(tags.get('artist',      tags.get('\xa9ART', [''])))
-                meta['album']        = clean_string(tags.get('album',       tags.get('\xa9alb', [''])))
-                meta['album_artist'] = clean_string(tags.get('albumartist',  tags.get('aART',    [''])))
-                meta['genre']        = clean_string(tags.get('genre',       tags.get('\xa9gen', [''])))
-                meta['year']         = clean_string(tags.get('date',        tags.get('\xa9day', [''])))[:4]
+                meta['title']        = clean_string(tags.get('title', ['']))
+                meta['artist']       = clean_string(tags.get('artist', ['']))
+                meta['album']        = clean_string(tags.get('album', ['']))
+                meta['album_artist'] = clean_string(tags.get('albumartist', tags.get('album_artist', [''])))
+                meta['genre']        = clean_string(tags.get('genre', ['']))
+                meta['year']         = clean_string(tags.get('date', ['']))[:4]
 
-                tr_val = clean_string(tags.get('tracknumber', tags.get('trkn', [''])))
+                tr_val = clean_string(tags.get('tracknumber', tags.get('track_number', [''])))
                 if isinstance(tr_val, tuple):
                     meta['track_num'] = str(tr_val[0]) if tr_val[0] else ''
                     if len(tr_val) > 1 and tr_val[1]:

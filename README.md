@@ -66,7 +66,7 @@ Commands follow a strict, predictable hierarchy: `syncdap <resource> <action> [t
 
 | Resource | Scope / Actions | Example Invocations |
 |---|---|---|
-| **`library`** | Global maintenance (`status`, `audit`, `dedup`, `optimize`, `patch`, `fix`, `romaji`) | `syncdap library status`<br>`syncdap library optimize -n` |
+| **`library`** | Global maintenance (`status`, `audit`, `dedup`, `optimize`, `patch`, `fix`, `organize`, `romaji`) | `syncdap library status`<br>`syncdap library organize -n` |
 | **`artist`** | Artist directory actions (`status`, `audit`, `dedup`, `fix`, `romaji`, `patch`) | `syncdap artist status "Queen"`<br>`syncdap artist fix "Radiohead"` |
 | **`album`** | Album folder actions (`status`, `audit`, `dedup`, `expand`, `optimize`, `patch`, `fix`, `romaji`) | `syncdap album audit ./Abbey_Road/`<br>`syncdap album expand ./Rip.mp3` |
 | **`track`** | Single-file actions (`status`, `audit`, `expand`, `patch`, `romaji`) | `syncdap track status ./song.flac`<br>`syncdap track patch mp3 ./song.wav` |

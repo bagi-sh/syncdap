@@ -207,8 +207,17 @@ orchestrate_library() {
             [ "$DRY_RUN" = true ] && romaji_args+=("-n")
             run_py "$SCRIPT_DIR/src/romaji/cli.py" "${romaji_args[@]}"
             ;;
+        organize)
+            local organize_args=("-r" "$music_root")
+            [ "$DRY_RUN" = true ] && organize_args+=("-n")
+            [ "$ASSUME_YES" = true ] && organize_args+=("-y")
+            [ "$VERBOSE" = true ] && organize_args+=("-v")
+            [ "$OUTPUT_FORMAT" = "json" ] && organize_args+=(--json)
+            run_py "$SCRIPT_DIR/src/modules/organize.py" "${organize_args[@]}"
+            cleanup_empty_dirs
+            ;;
         *)
-            error_dual "Invalid library action '$action'" "Supported actions: status, audit, dedup, optimize, patch, fix, romaji" "syncdap library $action" "" "Run 'syncdap library --help'"
+            error_dual "Invalid library action '$action'" "Supported actions: status, audit, dedup, optimize, patch, fix, organize, romaji" "syncdap library $action" "" "Run 'syncdap library --help'"
             exit 2
             ;;
     esac

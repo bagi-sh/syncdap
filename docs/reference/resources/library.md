@@ -65,6 +65,21 @@ syncdap library fix
 syncdap library fix -n
 ```
 
+### `organize`
+Restructures and standardizes audio files from any arbitrary or disorganized layout into syncdap's canonical Rockbox hierarchy:
+`Music/{AlbumArtist}/{Album}/{track_num} {title} - {track_artist}.ext`
+Also moves matching synchronized lyrics (`.lrc`), migrates folder artwork (`cover.jpg`), updates playlist paths, and prunes orphaned empty directories.
+```bash
+# Preview reorganization plan without moving files
+syncdap library organize --dry-run
+
+# Reorganize library with interactive confirmation
+syncdap library organize
+
+# Non-interactive reorganization directly on DAP
+syncdap library organize -r /mnt/dap -y -v
+```
+
 ### `romaji`
 Transliterates Japanese Kanji, Hiragana, and Katakana across all tags, filenames, and `.lrc` files in the library to Hepburn Romaji.
 ```bash

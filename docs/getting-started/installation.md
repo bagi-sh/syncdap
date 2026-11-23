@@ -21,33 +21,51 @@ This guide walks you through setting up `syncdap` on a Linux system.
 
 ## 2. Installing syncdap
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/bagi-sh/syncdap.git
-   cd syncdap
-   ```
+### Option A: Via `uv tool` (Recommended)
 
-2. **Make the entrypoint executable:**
-   ```bash
-   chmod +x syncdap
-   ```
+`syncdap` provides a standard `pyproject.toml` distribution with all dependencies managed in an isolated environment:
 
-3. **Verify the environment:**
-   Run the health check to verify all dependencies and your Python runtime:
-   ```bash
-   ./syncdap library status
-   ```
+```bash
+# Install directly from the GitHub repository:
+uv tool install git+https://github.com/bagi-sh/syncdap.git
 
-4. **Optional: Add to system PATH:**
-   To invoke `syncdap` from any directory:
-   ```bash
-   mkdir -p ~/.local/bin
-   ln -s "$(pwd)/syncdap" ~/.local/bin/syncdap
-   ```
-   Ensure `~/.local/bin` is in your `PATH` (in `~/.bashrc` or `~/.zshrc`):
-   ```bash
-   export PATH="$HOME/.local/bin:$PATH"
-   ```
+# Or install from a local clone:
+uv tool install .
+```
+
+To update to the newest bleeding-edge rolling-release commit:
+```bash
+syncdap update
+# or: uv tool upgrade syncdap
+```
+
+---
+
+### Option B: Standalone Lean Installer (Linux, macOS, WSL)
+
+If you prefer a direct Unix installation, the installer installs only the lean runtime code (`src/` and the `syncdap` coordinator) to `~/.local/share/syncdap` with a symlink in `~/.local/bin/syncdap`. It never bloats your system with `.git` history or documentation files (<1 MB total).
+
+#### 1-Line Remote Install
+```bash
+curl -fsSL https://raw.githubusercontent.com/bagi-sh/syncdap/main/install.sh | bash
+```
+
+#### From a Local Clone
+```bash
+git clone https://github.com/bagi-sh/syncdap.git
+cd syncdap
+./install.sh
+```
+
+#### Bleeding-Edge Rolling Updates
+The installed `syncdap` keeps track of rolling-release commits without needing a permanent `.git` directory:
+```bash
+syncdap update
+```
+
+---
+
+### Option C: Manual Portable Setup
 
 ---
 

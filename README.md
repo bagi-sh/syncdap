@@ -9,6 +9,33 @@ Modular synchronization, metadata standardization, and media maintenance coordin
 
 ---
 
+## Installation
+
+### Option 1: Via `uv tool` (Recommended)
+Install `syncdap` into an isolated Python environment and link it to `~/.local/bin/syncdap`:
+```bash
+uv tool install git+https://github.com/bagi-sh/syncdap.git
+```
+To update to the latest bleeding-edge commit at any time:
+```bash
+syncdap update
+# or: uv tool upgrade syncdap
+```
+
+### Option 2: Standalone Lean Installer (Linux, macOS, WSL)
+Installs only the lightweight runtime (<1 MB) without repository history or documentation bloat:
+```bash
+curl -fsSL https://raw.githubusercontent.com/bagi-sh/syncdap/main/install.sh | bash
+```
+Or from a local clone:
+```bash
+git clone https://github.com/bagi-sh/syncdap.git
+cd syncdap
+./install.sh
+```
+
+---
+
 ## Quickstart
 
 ### Prerequisites

@@ -12,7 +12,7 @@ syncdap <resource> [action] [target] [options]
 
 Where:
 * `<resource>`: The primary entity being managed (`library`, `artist`, `album`, `track`, `playlist`, `covers`, `lyrics`, `tags`, `scrobbler`, `config`, `download`, `search`, `rescue`).
-* `[action]`: The specific operation performed on the entity (e.g., `status`, `dedup`, `audit`, `optimize`, `fix`, `patch`, `romaji`).
+* `[action]`: The specific operation performed on the entity (e.g., `status`, `dedup`, `audit`, `optimize`, `fix`, `organize`, `patch`, `romaji`).
 * `[target]`: Path or query target (optional or required depending on the entity).
 * `[options]`: Execution flags modifier.
 

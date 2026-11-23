@@ -13,7 +13,7 @@
 | `download` | `orchestrate_download` | `src/sh/downloader.sh` | Spotify download via spotDL |
 | `search` | `orchestrate_search` | `src/modules/search.py` | Query metadata via iTunes/MusicBrainz |
 | `rescue` | `orchestrate_rescue` | `src/modules/fallback.py` | YouTube fallback download |
-| `library` | `orchestrate_library` | Varies (`stats`, `audit`, `dedup`, etc.) | Library-wide maintenance |
+| `library` | `orchestrate_library` | Varies (`stats`, `audit`, `dedup`, `organize`, etc.) | Library-wide maintenance |
 | `artist` | `orchestrate_artist` | Varies | Scoped to `/Music/<Artist>/` |
 | `album` | `orchestrate_album` | Varies (`album_expander.py`, etc.) | Scoped to `/Music/<Artist>/<Album>/` |
 | `track` | `orchestrate_track` | `src/patch/worker.py`, etc. | Scoped to individual audio file |

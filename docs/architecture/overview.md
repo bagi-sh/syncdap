@@ -72,6 +72,7 @@ src/
 │   ├── lyrics.py         # LRCLIB synchronized .lrc retrieval and embedding
 │   ├── playlist_repair.py# Fuzzy Levenshtein relinking of broken playlist tracks
 │   ├── rockbox_tags.py   # Split-album prevention (ALBUMARTIST) and filename cleanup
+│   ├── organize.py       # Restructures audio trees into canonical Rockbox folder hierarchy
 │   └── search.py         # Metadata resolution CLI helper
 │
 ├── patch/                # Audio format transcoding and quality upgrade pipeline

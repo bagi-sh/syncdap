@@ -65,6 +65,7 @@ Comprehensive specifications for each individual engine in `src/modules/` and do
 | **[`lyrics.md`](modules/lyrics.md)** | `src/modules/lyrics.py` | Multi-threaded timestamped `.lrc` search and tag embedding |
 | **[`playlist-repair.md`](modules/playlist-repair.md)**| `src/modules/playlist_repair.py` | Relinking moved/renamed files and pruning dead paths in playlists |
 | **[`rockbox-tags.md`](modules/rockbox-tags.md)** | `src/modules/rockbox_tags.py` | Unifying `ALBUM`/`ALBUMARTIST` per folder to prevent split albums |
+| **[`organize.md`](modules/organize.md)** | `src/modules/organize.py` | Restructures arbitrary audio trees into canonical Rockbox folder hierarchy |
 | **[`search.md`](modules/search.md)** | `src/modules/search.py` | Track and album search via iTunes/MusicBrainz |
 | **[`patch.md`](modules/patch.md)** | `src/patch/` | Transcoding and quality upgrade pipeline (`flac`, `mp3`, `opus`) |
 | **[`playlists.md`](modules/playlists.md)** | `src/playlists/` | Terminal interactive playlist manager, merger, and deleter |

@@ -8,16 +8,16 @@ import sys
 import time
 import webbrowser
 
-from src.scrobbler.client import (
+from scrobbler.client import (
     LastFmError,
     TokenPendingError,
     get_session,
     get_token,
 )
-from src.scrobbler.state import load_session, remove_session, save_session
-from src.share.config import get_lastfm_session_path
-from src.share.constants import LASTFM_API_KEY
-from src.share.icons import ICONS, format_error_dual
+from scrobbler.state import load_session, remove_session, save_session
+from share.config import get_lastfm_session_path
+from share.constants import LASTFM_API_KEY
+from share.icons import ICONS, format_error_dual
 
 
 def authenticate(force: bool = False, quiet: bool = False) -> dict[str, str] | None:

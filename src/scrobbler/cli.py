@@ -15,21 +15,25 @@ from pathlib import Path
 import sys
 import time
 
-from src.scrobbler.auth import authenticate, logout
-from src.scrobbler.client import LastFmError, scrobble_tracks
-from src.scrobbler.parser import LogParseResult, parse_scrobbler_log
-from src.scrobbler.state import (
+lib_dir = Path(__file__).resolve().parent.parent
+if str(lib_dir) not in sys.path:
+    sys.path.insert(0, str(lib_dir))
+
+from scrobbler.auth import authenticate, logout
+from scrobbler.client import LastFmError, scrobble_tracks
+from scrobbler.parser import LogParseResult, parse_scrobbler_log
+from scrobbler.state import (
     archive_log,
     load_session,
     load_state,
     save_state,
 )
-from src.share.config import (
+from share.config import (
     get_config_value,
     get_lastfm_session_path,
     get_scrobbler_state_path,
 )
-from src.share.icons import ICONS, format_error_dual
+from share.icons import ICONS, format_error_dual
 
 
 def resolve_log_path(target: str | None, root_dir: str | None) -> Path:
@@ -238,7 +242,8 @@ def handle_sync(args: argparse.Namespace) -> int:
         }
         if not args.dry_run and valid_tracks and session:
             try:
-                sub_res = scrobble_tracks(session["key"], valid_tracks)
+                session_key = session.get("key") or session.get("session_key", "")
+                sub_res = scrobble_tracks(session_key, valid_tracks)
                 payload["submitted"] = sub_res["accepted"]
                 payload["ignored"] = sub_res["ignored"]
                 # Rotate & clean
@@ -300,7 +305,8 @@ def handle_sync(args: argparse.Namespace) -> int:
         )
 
     try:
-        sub_res = scrobble_tracks(session["key"], valid_tracks)
+        session_key = session.get("key") or session.get("session_key", "")
+        sub_res = scrobble_tracks(session_key, valid_tracks)
     except LastFmError as e:
         print(
             format_error_dual(

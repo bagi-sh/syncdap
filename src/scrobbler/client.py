@@ -13,8 +13,8 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from src.scrobbler.parser import ScrobbleEntry
-from src.share.constants import LASTFM_API_KEY, LASTFM_API_SECRET
+from scrobbler.parser import ScrobbleEntry
+from share.constants import LASTFM_API_KEY, LASTFM_API_SECRET
 
 LASTFM_API_ROOT = "https://ws.audioscrobbler.com/2.0/"
 

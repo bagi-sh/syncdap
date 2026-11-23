@@ -9,7 +9,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from src.share.config import (
+from share.config import (
     get_config_dir,
     get_lastfm_session_path,
     get_scrobbler_log_archive_dir,
@@ -37,6 +37,12 @@ def load_session() -> dict[str, str] | None:
         return None
 
     if "session_key" in session and "username" in session:
+        session["key"] = session["session_key"]
+        session["name"] = session["username"]
+        return session
+    if "key" in session and "username" in session:
+        session["session_key"] = session["key"]
+        session["name"] = session["username"]
         return session
     return None
 

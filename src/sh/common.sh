@@ -13,7 +13,7 @@ source "$SCRIPT_DIR/src/sh/icons.sh"
 source "$SCRIPT_DIR/src/sh/config.sh"
 
 # Global state
-export PYTHONPATH="${SCRIPT_DIR}/src:${PYTHONPATH:-}"
+export PYTHONPATH="${SCRIPT_DIR}/src:${SCRIPT_DIR}:${PYTHONPATH:-}"
 MARKER=""
 TEMP_DIR=""
 RAW_URL=""

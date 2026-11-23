@@ -33,6 +33,8 @@ def analyze_playlist(pl_path):
                 'shared_with': []
             })
 
+    tracks_by_path = {os.path.abspath(t['path']): t for t in tracks if t['exists']}
+
     all_playlists = get_all_playlist_files()
     for other_pl in all_playlists:
         if os.path.abspath(other_pl) == pl_path:
@@ -42,10 +44,10 @@ def analyze_playlist(pl_path):
             other_entries = parse_playlist_file(other_pl)
             for oe in other_entries:
                 if not oe.is_comment and oe.resolved_path:
-                    for t in tracks:
-                        if t['exists'] and os.path.abspath(t['path']) == os.path.abspath(oe.resolved_path):
-                            if other_name not in t['shared_with']:
-                                t['shared_with'].append(other_name)
+                    oe_abs = os.path.abspath(oe.resolved_path)
+                    matched_t = tracks_by_path.get(oe_abs)
+                    if matched_t and other_name not in matched_t['shared_with']:
+                        matched_t['shared_with'].append(other_name)
         except Exception:
             pass
 

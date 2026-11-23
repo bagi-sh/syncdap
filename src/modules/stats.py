@@ -84,7 +84,18 @@ def analyze_library(root_dir, output_format="table"):
         for dirpath, dirnames, filenames in os.walk(root_path):
             dirnames[:] = [d for d in dirnames if d.lower() not in IGNORED_DIRS and not d.startswith('.Trash')]
 
-            has_standalone = any(os.path.isfile(os.path.join(dirpath, cn)) and os.path.getsize(os.path.join(dirpath, cn)) > 0 for cn in COVER_FILENAMES)
+            filenames_lower = {f.lower(): f for f in filenames}
+            has_standalone = False
+            for cn in COVER_FILENAMES:
+                matched_fname = filenames_lower.get(cn.lower())
+                if matched_fname:
+                    full_cover = os.path.join(dirpath, matched_fname)
+                    try:
+                        if os.path.getsize(full_cover) > 0:
+                            has_standalone = True
+                            break
+                    except OSError:
+                        pass
 
             dir_audio = []
             for f in filenames:

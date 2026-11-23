@@ -32,6 +32,7 @@ def build_library_index(music_dir):
     folder_map = {}
     by_norm_stem = defaultdict(list)
     by_norm_fn = defaultdict(list)
+    by_fuzzy_stem = defaultdict(list)
     total_audio = 0
 
     for root, dirs, files in os.walk(music_dir):
@@ -48,15 +49,20 @@ def build_library_index(music_dir):
             if ext.lower() in AUDIO_EXTENSIONS:
                 full_path = os.path.join(root, f)
                 total_audio += 1
-                by_norm_stem[norm_str(base)].append(full_path)
+                norm_base = norm_str(base)
+                by_norm_stem[norm_base].append(full_path)
                 by_norm_fn[norm_str(f)].append(full_path)
+                fuzzy_base = re.sub(r'[^a-z0-9]', '', norm_base)
+                if fuzzy_base:
+                    by_fuzzy_stem[fuzzy_base].append(full_path)
 
     return {
         'music_dir': music_dir,
         'total_audio': total_audio,
         'folder_map': folder_map,
         'by_norm_stem': by_norm_stem,
-        'by_norm_fn': by_norm_fn
+        'by_norm_fn': by_norm_fn,
+        'by_fuzzy_stem': by_fuzzy_stem,
     }
 
 
@@ -134,13 +140,10 @@ def resolve_playlist_entry(raw_path, pl_path, index):
         if len(filtered) == 1:
             return filtered[0], 'stem_album_hint'
 
-    # 6. Romaji / Stripped special chars fuzzy stem match
+    # 6. Romaji / Stripped special chars fuzzy stem match (O(1) pre-indexed lookup)
     fuzzy_norm = re.sub(r'[^a-z0-9]', '', norm_str(stem))
     if fuzzy_norm:
-        candidates = []
-        for indexed_stem, paths in index['by_norm_stem'].items():
-            if re.sub(r'[^a-z0-9]', '', indexed_stem) == fuzzy_norm:
-                candidates.extend(paths)
+        candidates = index.get('by_fuzzy_stem', {}).get(fuzzy_norm, [])
         if len(candidates) == 1:
             return candidates[0], 'fuzzy_stem'
 
@@ -164,15 +167,19 @@ def repair_playlists(root_dir, dry_run=False):
     index = build_library_index(music_dir)
     print(f"   Indexed {index['total_audio']:,} audio files in library.\n")
 
-    # Candidate playlist directories
+    # Candidate playlist directories strictly contained in target root
     search_dirs = [
         root_path,
         os.path.join(root_path, 'Playlists'),
-        os.path.join(os.path.dirname(root_path), 'Playlists')
+        os.path.join(root_path, 'playlists'),
     ]
-    home_pl = os.path.expanduser('~/Playlists')
-    if os.path.isdir(home_pl):
-        search_dirs.append(home_pl)
+    # Only include host ~/Playlists if the target root is the local workstation environment
+    user_home = os.path.abspath(os.path.expanduser('~'))
+    user_music = os.path.join(user_home, 'Music')
+    if root_path in (user_home, user_music, os.path.abspath('.')):
+        home_pl = os.path.expanduser('~/Playlists')
+        if os.path.isdir(home_pl) and home_pl not in search_dirs:
+            search_dirs.append(home_pl)
 
     playlists = find_all_playlists(search_dirs)
     if not playlists:

@@ -46,25 +46,28 @@ def group_duplicates(audio_files):
             track_title_groups[(parent, info['track_no'], norm_title)].append(info)
 
     all_groups = []
-    seen_files = set()
+    seen_groups = set()
+    seen_paths = set()
 
     # 1. Collect direct stem matches
     for (parent, norm_stem), group in stem_groups.items():
         if len(group) > 1:
             group_paths = tuple(sorted(item['path'] for item in group))
-            if group_paths not in seen_files:
-                seen_files.add(group_paths)
+            if group_paths not in seen_groups:
+                seen_groups.add(group_paths)
+                seen_paths.update(group_paths)
                 all_groups.append(group)
 
-    # 2. Collect track_no + title matches not already grouped
+    # 2. Collect track_no + title matches not already grouped (O(1) set membership)
     for (parent, track_no, norm_title), group in track_title_groups.items():
         if len(group) > 1:
             group_paths = tuple(sorted(item['path'] for item in group))
-            # Check if any file was already part of an exact stem group
-            already_covered = any(any(item['path'] in g_paths for item in group) for g_paths in seen_files)
-            if not already_covered:
-                seen_files.add(group_paths)
-                all_groups.append(group)
+            if group_paths not in seen_groups:
+                # Check if any file was already part of an exact stem group
+                if not any(item['path'] in seen_paths for item in group):
+                    seen_groups.add(group_paths)
+                    seen_paths.update(group_paths)
+                    all_groups.append(group)
 
     return all_groups
 

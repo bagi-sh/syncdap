@@ -318,9 +318,12 @@ validate_format() {
     esac
 }
 
-# Cleanup empty residual directories
+# Cleanup empty residual directories within target root
 cleanup_empty_dirs() {
-    find . -mindepth 1 -type d -empty ! -path "./Playlists*" -delete 2>/dev/null || true
+    local target="${TARGET_ROOT:-.}"
+    if [ -d "$target" ]; then
+        find "$target" -mindepth 1 -type d -empty ! -path "*/Playlists*" ! -path "*/.git*" ! -path "*/.rockbox*" -delete 2>/dev/null || true
+    fi
 }
 
 # Update handler

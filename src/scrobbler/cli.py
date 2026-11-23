@@ -144,6 +144,7 @@ def handle_status(args: argparse.Namespace) -> int:
             "log_path": str(log_file) if log_present else None,
             "effective_tz_offset_hours": parse_res.effective_tz_offset_hours if parse_res else None,
             "effective_tz_source": parse_res.effective_tz_source if parse_res else None,
+            "total_in_log": len(parse_res.entries) if parse_res else 0,
             "pending_scrobbles": len(parse_res.valid_entries) if parse_res else 0,
             "skipped_rating": len(parse_res.skipped_rating) if parse_res else 0,
             "expired": len(parse_res.expired) if parse_res else 0,

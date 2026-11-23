@@ -18,10 +18,20 @@ def find_cover_image(album_dir: str) -> str | None:
     """Find local front cover art file in album_dir (cover.jpg, folder.jpg, etc.)."""
     if not album_dir or not os.path.isdir(album_dir):
         return None
+    try:
+        entries = {f.lower(): f for f in os.listdir(album_dir)}
+    except OSError:
+        return None
+
     for name in COVER_FILENAMES:
-        p = os.path.join(album_dir, name)
-        if os.path.isfile(p) and os.path.getsize(p) > 0:
-            return os.path.abspath(p)
+        matched = entries.get(name.lower())
+        if matched:
+            p = os.path.join(album_dir, matched)
+            try:
+                if os.path.isfile(p) and os.path.getsize(p) > 0:
+                    return os.path.abspath(p)
+            except OSError:
+                continue
     return None
 
 

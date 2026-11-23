@@ -431,6 +431,11 @@ parse_arguments() {
                 THREADS="$2"
                 shift 2
                 ;;
+            -f|--force)
+                FORCE=true
+                raw_positionals+=("$1")
+                shift 1
+                ;;
             -c|--config)
                 if [[ $# -lt 2 ]] || [[ "$2" =~ ^- ]]; then
                     error_dual "Missing config path" "-c / --config requires a configuration file" "" "" "Pass a path: syncdap -c ~/.config/syncdap/config"

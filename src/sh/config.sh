@@ -21,11 +21,27 @@ load_config() {
             [ -z "$key" ] && continue
 
             case "$key" in
-                icons)      CONFIG_ICONS="$val" ;;
-                threads)    CONFIG_THREADS="$val" ;;
-                format)     CONFIG_FORMAT="$val" ;;
-                root_dir)   CONFIG_ROOT_DIR="$val" ;;
-                synced_only) CONFIG_SYNCED_ONLY="$val" ;;
+                icons)                  CONFIG_ICONS="$val" ;;
+                threads)                CONFIG_THREADS="$val" ;;
+                format)                 CONFIG_FORMAT="$val" ;;
+                root_dir)               CONFIG_ROOT_DIR="$val" ;;
+                synced_only)            CONFIG_SYNCED_ONLY="$val" ;;
+                cover_name)             CONFIG_COVER_NAME="$val" ;;
+                cover_resolution)       CONFIG_COVER_RESOLUTION="$val" ;;
+                cover_filenames)        CONFIG_COVER_FILENAMES="$val" ;;
+                audit_threshold)        CONFIG_AUDIT_THRESHOLD="$val" ;;
+                audit_ratio)            CONFIG_AUDIT_RATIO="$val" ;;
+                clean_ghost_files)      CONFIG_CLEAN_GHOST_FILES="$val" ;;
+                scrobbler_keep_log)     CONFIG_KEEP_LOG="$val" ;;
+                scrobbler_tz_offset)    CONFIG_TZ_OFFSET="$val" ;;
+                scrobbler_batch_size)   CONFIG_SCROBBLER_BATCH_SIZE="$val" ;;
+                spotdl_providers)       CONFIG_SPOTDL_PROVIDERS="$val" ;;
+                spotdl_max_retries)     CONFIG_SPOTDL_MAX_RETRIES="$val" ;;
+                spotdl_throttled_rate)  CONFIG_SPOTDL_THROTTLED_RATE="$val" ;;
+                api_timeout)            CONFIG_API_TIMEOUT="$val" ;;
+                id3_version)            CONFIG_ID3_VERSION="$val" ;;
+                assume_yes)             CONFIG_ASSUME_YES="$val" ;;
+                ignored_dirs)           CONFIG_IGNORED_DIRS="$val" ;;
             esac
         done < "$CONFIG_FILE"
     fi
@@ -99,16 +115,105 @@ handle_config_command() {
             ;;
         init)
             mkdir -p "$CONFIG_DIR"
-            if [ ! -f "$CONFIG_FILE" ]; then
+            local force_init=false
+            if [ "${2:-}" = "-f" ] || [ "${2:-}" = "--force" ] || [ "${FORCE:-false}" = true ]; then
+                force_init=true
+            fi
+
+            if [ ! -f "$CONFIG_FILE" ] || [ "$force_init" = true ]; then
                 cat << 'EOF' > "$CONFIG_FILE"
-# syncdap configuration
-icons=auto
+# ==============================================================================
+# syncdap configuration file (~/.config/syncdap/config)
+# Modular Rockbox & DAP music library synchronization coordinator
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Core Runtime & Terminal UX
+# ------------------------------------------------------------------------------
+# Default target audio format: mp3, flac, m4a, opus, ogg, wav
+format=mp3
+
+# Worker thread concurrency for audio processing, scanning, and downloads
 threads=4
-format=flac
+
+# Default target music library or DAP mount root directory ('.' = current directory)
+root_dir=.
+
+# Terminal iconography rendering: 'auto' (detect capability), 'true' (Nerd Font / Unicode), 'false' (ASCII)
+icons=auto
+
+# Automatically assume yes on interactive confirmation prompts: 'true' or 'false'
+assume_yes=false
+
+# ------------------------------------------------------------------------------
+# 2. Cover Artwork & Display
+# ------------------------------------------------------------------------------
+# Canonical external artwork filename generated for album directories
+cover_name=cover.jpg
+
+# Download artwork resolution in pixels (e.g. 600 for 600x600, optimal for DAP RAM)
+cover_resolution=600
+
+# Recognized front cover filenames for discovery and inspection (comma-separated)
+cover_filenames=cover.jpg,cover.jpeg,cover.png,folder.jpg,folder.jpeg,folder.png
+
+# ------------------------------------------------------------------------------
+# 3. Synchronized Lyrics (.lrc)
+# ------------------------------------------------------------------------------
+# Enforce timestamped lyrics: 'true' (discard plain lyrics), 'false' (allow plain fallback)
+synced_only=false
+
+# ------------------------------------------------------------------------------
+# 4. Rockbox Hardware & Tag Standardization
+# ------------------------------------------------------------------------------
+# Target ID3v2 version: '3' (ID3v2.3 UTF-16, optimal for Rockbox) or '4' (ID3v2.4 UTF-8)
+id3_version=3
+
+# Automatically purge OS ghost files (._*, Thumbs.db, .DS_Store) during library scans
+clean_ghost_files=true
+
+# Directories ignored during audio scanning (comma-separated, case-insensitive)
+ignored_dirs=lost.dir,.trash-1000,.trash,system volume information,.android_secure,.rockbox,backup,__pycache__,.git,playlists,lib
+
+# ------------------------------------------------------------------------------
+# 5. Library Audit & Full-Album Rip Detection
+# ------------------------------------------------------------------------------
+# Duration threshold in seconds to trigger duration audit (600s = 10 minutes)
+audit_threshold=600
+
+# Multiplier ratio (local_duration / canonical_duration) above which a file is flagged as an album rip
+audit_ratio=1.5
+
+# ------------------------------------------------------------------------------
+# 6. Audioscrobbler & Last.fm Synchronization
+# ------------------------------------------------------------------------------
+# Keep .scrobbler.log on DAP after successful synchronization: 'true' or 'false'
+scrobbler_keep_log=false
+
+# Explicit timezone UTC offset override (e.g. -3, 0, 2). Leave empty for auto host detection
+scrobbler_tz_offset=
+
+# Maximum tracks submitted per Last.fm batch POST request (1 to 50)
+scrobbler_batch_size=50
+
+# ------------------------------------------------------------------------------
+# 7. Download Ingestion & Stream Extraction
+# ------------------------------------------------------------------------------
+# Audio providers prioritized by spotDL (space-separated)
+spotdl_providers=youtube youtube-music soundcloud bandcamp
+
+# Maximum download retry attempts per track in spotDL
+spotdl_max_retries=1
+
+# Rate throttling argument for yt-dlp to bypass bot detection (e.g. '100K')
+spotdl_throttled_rate=100K
+
+# Default HTTP request timeout in seconds for metadata APIs (iTunes, MusicBrainz, LRCLIB)
+api_timeout=8
 EOF
-                echo "✓ Initialized configuration at: $CONFIG_FILE"
+                echo "✓ Initialized configuration with all defaults at: $CONFIG_FILE"
             else
-                echo "! Configuration file already exists at: $CONFIG_FILE"
+                echo "! Configuration file already exists at: $CONFIG_FILE (use 'syncdap config init --force' to overwrite with all defaults)"
             fi
             ;;
         *)

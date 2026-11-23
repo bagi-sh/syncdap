@@ -6,18 +6,27 @@ import os
 import subprocess
 import sys
 
-from share import find_audio_files, get_audio_metadata, get_track_duration, format_duration, ICONS
+from share import (
+    find_audio_files,
+    get_audio_metadata,
+    get_track_duration,
+    format_duration,
+    ICONS,
+    AUDIT_THRESHOLD_SECONDS,
+    AUDIT_RATIO_THRESHOLD,
+)
 
 
 def audit_long_tracks(
     music_root: str,
-    threshold_seconds: float = 600.0,
+    threshold_seconds: float = AUDIT_THRESHOLD_SECONDS,
     json_output: bool = False,
     auto_split: bool = False,
+    ratio_threshold: float = AUDIT_RATIO_THRESHOLD,
 ) -> tuple[list[str], int, int, int]:
     """Scan music_root for tracks longer than threshold and verify against APIs.
 
-    Files with ratio > 1.5x compared to expected track duration indicate
+    Files with ratio > ratio_threshold compared to expected track duration indicate
     full-album single-file rips.
     """
     if not json_output:
@@ -62,7 +71,7 @@ def audit_long_tracks(
             local_fmt = format_duration(local_dur)
             exp_fmt   = format_duration(expected_dur)
 
-            if ratio > 1.5:
+            if ratio > ratio_threshold:
                 status = f"{ICONS.err} FULL-ALBUM RIP"
                 suspect_count += 1
                 suspect_paths.append(fpath)
@@ -76,7 +85,7 @@ def audit_long_tracks(
             if not json_output:
                 print(f"{status:<20} | {local_fmt:<9} | {exp_fmt:<9} | {ratio:<6.1f}x | {track_label:<40}")
 
-            if ratio > 1.5 and not json_output:
+            if ratio > ratio_threshold and not json_output:
                 print(f"   {ICONS.arrow} Suggestion: syncdap album expand \"{fpath}\"")
                 if auto_split:
                     print(f"   {ICONS.dl} Auto-expanding: {fpath}")
@@ -108,8 +117,12 @@ def main() -> None:
     )
     parser.add_argument("-r", "--root-dir", default=".", help="Root music library path to scan.")
     parser.add_argument(
-        "-t", "--threshold", type=float, default=600.0,
-        help="Duration threshold in seconds (default: 600 = 10 min)."
+        "-t", "--threshold", type=float, default=AUDIT_THRESHOLD_SECONDS,
+        help=f"Duration threshold in seconds (default: {AUDIT_THRESHOLD_SECONDS:.0f} = {AUDIT_THRESHOLD_SECONDS/60:.0f} min)."
+    )
+    parser.add_argument(
+        "--ratio", type=float, default=AUDIT_RATIO_THRESHOLD,
+        help=f"Duration ratio threshold to classify full-album rips (default: {AUDIT_RATIO_THRESHOLD}x)."
     )
     parser.add_argument("--json", action="store_true", help="Output suspect file paths as JSON array.")
     parser.add_argument(
@@ -123,6 +136,7 @@ def main() -> None:
         args.threshold,
         json_output=args.json,
         auto_split=args.auto_split,
+        ratio_threshold=args.ratio,
     )
 
     if args.json:

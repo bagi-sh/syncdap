@@ -14,7 +14,7 @@ import urllib.request
 from typing import Any
 
 from scrobbler.parser import ScrobbleEntry
-from share.constants import LASTFM_API_KEY, LASTFM_API_SECRET
+from share.constants import LASTFM_API_KEY, LASTFM_API_SECRET, SCROBBLER_BATCH_SIZE
 
 LASTFM_API_ROOT = "https://ws.audioscrobbler.com/2.0/"
 
@@ -174,17 +174,19 @@ def scrobble_tracks(
     session_key: str,
     tracks: list[ScrobbleEntry],
     batch_delay: float = 0.25,
+    batch_size: int = SCROBBLER_BATCH_SIZE,
 ) -> dict[str, Any]:
-    """Submit all valid tracks to Last.fm in sequential batches of 50.
+    """Submit all valid tracks to Last.fm in sequential batches.
 
     Halts immediately if any batch fails to ensure unsubmitted tracks are not lost.
     """
     total_accepted = 0
     total_ignored = 0
-    batches_count = (len(tracks) + 49) // 50
+    bs = max(1, min(50, batch_size))
+    batches_count = (len(tracks) + bs - 1) // bs
 
     for b in range(batches_count):
-        chunk = tracks[b * 50 : (b + 1) * 50]
+        chunk = tracks[b * bs : (b + 1) * bs]
         res = scrobble_batch(session_key, chunk)
         total_accepted += res["accepted"]
         total_ignored += res["ignored"]

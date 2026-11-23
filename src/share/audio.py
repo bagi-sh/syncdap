@@ -14,7 +14,7 @@ from mutagen.oggvorbis import OggVorbis
 from mutagen.oggopus import OggOpus
 from mutagen.wave import WAVE
 
-from .constants import AUDIO_EXTENSIONS, IGNORED_DIRS, LOSSLESS_EXTENSIONS
+from .constants import AUDIO_EXTENSIONS, IGNORED_DIRS, LOSSLESS_EXTENSIONS, ID3_VERSION
 from .text import clean_string, parse_filename_metadata
 from .covers import has_embedded_cover as has_embedded_cover_fast
 
@@ -210,7 +210,7 @@ def write_audio_metadata(
                     desc='Cover',
                     data=img_data
                 ))
-            audio.save(v2_version=3)
+            audio.save(v2_version=ID3_VERSION)
             return True
 
         elif ext == '.flac':
@@ -316,7 +316,7 @@ def set_audio_genre(file_path: str, genre_name: str) -> bool:
             if audio.tags is None:
                 audio.add_tags()
             audio.tags.setall('TCON', [TCON(encoding=3, text=genre_name)])
-            audio.save(v2_version=3)
+            audio.save(v2_version=ID3_VERSION)
             return True
         elif ext == '.flac':
             audio = FLAC(file_path)

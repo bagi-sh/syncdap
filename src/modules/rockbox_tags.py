@@ -14,6 +14,7 @@ from collections import Counter, defaultdict
 from share import (
     AUDIO_EXTENSIONS,
     IGNORED_DIRS,
+    CLEAN_GHOST_FILES,
     clean_string,
     parse_filename_metadata,
     read_audio_metadata,
@@ -93,6 +94,10 @@ def sanitize_rockbox_metadata(root_dir, dry_run=False):
         dirnames[:] = [d for d in dirnames if d.lower() not in IGNORED_DIRS and not d.startswith('.Trash')]
 
         for f in filenames:
+            if CLEAN_GHOST_FILES and (f.startswith('._') or f in ('Thumbs.db', 'desktop.ini', '.DS_Store', 'ehthumbs.db')):
+                zero_byte_files.append(os.path.join(dirpath, f))
+                continue
+
             ext = os.path.splitext(f)[1].lower()
             if ext in AUDIO_EXTENSIONS:
                 full_path = os.path.join(dirpath, f)

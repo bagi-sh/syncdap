@@ -11,7 +11,7 @@ from mutagen.mp4 import MP4, MP4Cover
 from mutagen.oggvorbis import OggVorbis
 from mutagen.oggopus import OggOpus
 
-from .constants import COVER_FILENAMES
+from .constants import COVER_FILENAMES, ID3_VERSION
 
 
 def find_cover_image(album_dir: str) -> str | None:
@@ -79,7 +79,7 @@ def embed_cover_in_file(file_path: str, img_data: bytes, mime_type: str = 'image
                 desc='',
                 data=img_data
             ))
-            audio.save(v2_version=3)
+            audio.save(v2_version=ID3_VERSION)
             return True
 
         elif ext == '.flac':
@@ -158,7 +158,7 @@ def strip_covers_from_file(file_path: str) -> bool:
             audio = MP3(file_path, ID3=ID3)
             if audio.tags and any(isinstance(t, APIC) for t in audio.tags.values()):
                 audio.tags.delall('APIC')
-                audio.save(v2_version=3)
+                audio.save(v2_version=ID3_VERSION)
                 return True
         elif ext == '.flac':
             audio = FLAC(file_path)

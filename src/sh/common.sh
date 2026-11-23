@@ -22,6 +22,7 @@ AUDIO_FORMAT="mp3"
 THREADS=4
 SYNCED_ONLY=false
 ASSUME_YES=false
+FORCE=false
 KEEP_OLD=false
 DRY_RUN=false
 VERBOSE=false
@@ -36,6 +37,13 @@ if [ -n "${CONFIG_THREADS:-}" ]; then THREADS="$CONFIG_THREADS"; fi
 if [ -n "${CONFIG_FORMAT:-}" ]; then AUDIO_FORMAT="$CONFIG_FORMAT"; fi
 if [ -n "${CONFIG_ROOT_DIR:-}" ]; then TARGET_ROOT="$CONFIG_ROOT_DIR"; fi
 if [ "${CONFIG_SYNCED_ONLY:-}" = "true" ]; then SYNCED_ONLY=true; fi
+if [ -n "${CONFIG_ICONS:-}" ]; then FORCE_ICONS="$CONFIG_ICONS"; fi
+if [ "${CONFIG_ASSUME_YES:-}" = "true" ]; then ASSUME_YES=true; fi
+if [ "${CONFIG_KEEP_LOG:-}" = "true" ]; then KEEP_LOG=true; fi
+if [ -n "${CONFIG_TZ_OFFSET:-}" ]; then TZ_OFFSET="$CONFIG_TZ_OFFSET"; fi
+if [ -n "${CONFIG_SPOTDL_PROVIDERS:-}" ]; then SPOTDL_PROVIDERS="$CONFIG_SPOTDL_PROVIDERS"; fi
+if [ -n "${CONFIG_SPOTDL_MAX_RETRIES:-}" ]; then SPOTDL_MAX_RETRIES="$CONFIG_SPOTDL_MAX_RETRIES"; fi
+if [ -n "${CONFIG_SPOTDL_THROTTLED_RATE:-}" ]; then SPOTDL_THROTTLED_RATE="$CONFIG_SPOTDL_THROTTLED_RATE"; fi
 
 # Initialize terminal symbols & colors
 init_iconography

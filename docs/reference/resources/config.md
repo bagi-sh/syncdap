@@ -9,6 +9,8 @@ The `config` resource manages persistent settings stored in `~/.config/syncdap/c
 ```text
 syncdap config [action]
 syncdap config <key>=<value>
+syncdap config set <key> <value>
+syncdap config get <key>
 ```
 
 ---
@@ -21,25 +23,60 @@ syncdap config <key>=<value>
 syncdap config list
 ```
 
+### Initializing Configuration with Complete Defaults
+```bash
+# Generate default config file if none exists
+syncdap config init
+
+# Overwrite existing config file with all defaults
+syncdap config init --force
+```
+
 ### Modifying Settings
 ```bash
 # Direct key=value syntax
-syncdap config icons=true
-syncdap config threads=8
 syncdap config format=flac
-syncdap config root_dir=/mnt/dap/Music
+syncdap config threads=8
+syncdap config cover_name=cover.jpg
+syncdap config cover_resolution=600
+syncdap config audit_threshold=600
+syncdap config scrobbler_batch_size=50
 
 # Alternative set syntax
 syncdap config set icons true
+syncdap config set spotdl_throttled_rate 150K
 ```
 
 ### Retrieving a Setting
 ```bash
 syncdap config get root_dir
+syncdap config get format
 ```
 
-### Initializing Configuration
-```bash
-# Generates a default config file if none exists
-syncdap config init
-```
+---
+
+## 3. Configuration Keys Matrix
+
+| Category | Key | Valid Options | Default | Description |
+|---|---|---|---|---|
+| **Core** | `format` | `mp3`, `flac`, `m4a`, `opus`, `ogg`, `wav` | `mp3` | Target audio format for media ingestion and patching |
+| **Core** | `threads` | Integer (`1`–`32`) | `4` | Concurrency worker threads |
+| **Core** | `root_dir` | Directory path | `.` | Default music root or DAP mount |
+| **Core** | `icons` | `auto`, `true`, `false` | `auto` | Terminal symbol rendering tier |
+| **Core** | `assume_yes` | `true`, `false` | `false` | Skip interactive confirmation prompts |
+| **Covers** | `cover_name` | Filename | `cover.jpg` | Canonical external artwork filename |
+| **Covers** | `cover_resolution` | Integer | `600` | Target download artwork resolution in px |
+| **Covers** | `cover_filenames` | Comma-separated | `cover.jpg,cover.jpeg,folder.jpg...` | Recognized cover filenames for traversal |
+| **Lyrics** | `synced_only` | `true`, `false` | `false` | Enforce timestamped lyrics |
+| **Tags** | `id3_version` | `3`, `4` | `3` | Target ID3v2 version (3 = ID3v2.3 UTF-16) |
+| **Tags** | `clean_ghost_files`| `true`, `false` | `true` | Purge OS ghost files (`._*`, `Thumbs.db`) |
+| **Tags** | `ignored_dirs` | Comma-separated | `lost.dir,.trash,.rockbox...` | System folders excluded from traversal |
+| **Audit** | `audit_threshold` | Seconds | `600` | Duration threshold to audit long tracks |
+| **Audit** | `audit_ratio` | Float | `1.5` | Ratio to classify full-album continuous rips |
+| **Scrobbler**| `scrobbler_keep_log`| `true`, `false` | `false` | Retain log on DAP after sync |
+| **Scrobbler**| `scrobbler_tz_offset`| Integer / Float | *(auto)* | Explicit UTC timezone offset override |
+| **Scrobbler**| `scrobbler_batch_size`| Integer (`1`–`50`) | `50` | Maximum tracks per Last.fm batch |
+| **Network** | `spotdl_providers` | Space-separated | `youtube youtube-music soundcloud bandcamp` | Priority audio providers for spotDL |
+| **Network** | `spotdl_max_retries`| Integer | `1` | Max download retries in spotDL |
+| **Network** | `spotdl_throttled_rate`| Rate string | `100K` | Rate throttling argument for yt-dlp |
+| **Network** | `api_timeout` | Seconds | `8` | Default HTTP request timeout for metadata APIs |

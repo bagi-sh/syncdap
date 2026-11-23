@@ -10,6 +10,7 @@ _UA = 'SyncDAP/1.0'
 _UA_MB = 'SyncDAP/1.0 (info@syncdap.local)'
 
 from .text import clean_term
+from .constants import API_TIMEOUT, COVER_RESOLUTION
 _ALBUM_EDITION_RE = re.compile(
     r'\s*[\(\[,]\s*(?:deluxe|deluxe edition|super deluxe|remastered|remaster|'
     r'expanded|anniversary|bonus tracks?|special edition|limited edition|'
@@ -38,7 +39,7 @@ def itunes_search(query: str, entity: str = 'song', limit: int = 5) -> list[dict
     })
     try:
         req = urllib.request.Request(url, headers={'User-Agent': _UA})
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=API_TIMEOUT) as resp:
             return json.load(resp).get('results', [])
     except Exception:
         return []
@@ -49,7 +50,7 @@ def itunes_lookup_collection(collection_id: int) -> list[dict]:
     url = f'https://itunes.apple.com/lookup?id={collection_id}&entity=song'
     try:
         req = urllib.request.Request(url, headers={'User-Agent': _UA})
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=API_TIMEOUT) as resp:
             return json.load(resp).get('results', [])
     except Exception:
         return []
@@ -79,7 +80,7 @@ def itunes_album_tracklist(artist: str, album: str) -> list[dict] | None:
         return None
     tracks = []
     items = itunes_lookup_collection(collection_id)
-    album_cover = results[0].get('artworkUrl100', '').replace('100x100bb', '600x600bb')
+    album_cover = results[0].get('artworkUrl100', '').replace('100x100bb', f'{COVER_RESOLUTION}x{COVER_RESOLUTION}bb')
     album_artist = results[0].get('artistName', artist)
     album_year = str(results[0].get('releaseDate', ''))[:4]
     album_genre = results[0].get('primaryGenreName', '')
@@ -90,7 +91,7 @@ def itunes_album_tracklist(artist: str, album: str) -> list[dict] | None:
         title = t.get('trackName')
         dur_ms = t.get('trackTimeMillis')
         if title and dur_ms:
-            cover = t.get('artworkUrl100', '').replace('100x100bb', '600x600bb') or album_cover
+            cover = t.get('artworkUrl100', '').replace('100x100bb', f'{COVER_RESOLUTION}x{COVER_RESOLUTION}bb') or album_cover
             tracks.append({
                 'number': t.get('trackNumber', len(tracks) + 1),
                 'disc_number': t.get('discNumber', 1),
@@ -120,7 +121,7 @@ def itunes_song_metadata(query: str, is_album: bool = False) -> dict | None:
     if not candidates:
         return None
     r = candidates[0]
-    cover = r.get('artworkUrl100', '').replace('100x100bb', '600x600bb')
+    cover = r.get('artworkUrl100', '').replace('100x100bb', f'{COVER_RESOLUTION}x{COVER_RESOLUTION}bb')
     return {
         'artist':       r.get('artistName', ''),
         'name':         r.get('trackName', r.get('collectionName', '')),
@@ -143,7 +144,7 @@ def _mb_get(url: str) -> dict:
     """GET a MusicBrainz JSON endpoint, respecting rate limit."""
     time.sleep(1.0)
     req = urllib.request.Request(url, headers={'User-Agent': _UA_MB})
-    with urllib.request.urlopen(req, timeout=8) as resp:
+    with urllib.request.urlopen(req, timeout=API_TIMEOUT) as resp:
         return json.load(resp)
 
 

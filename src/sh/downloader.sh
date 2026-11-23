@@ -19,6 +19,10 @@ run_spotdl_download() {
         is_playlist=true
     fi
 
+    local spotdl_providers="${SPOTDL_PROVIDERS:-youtube youtube-music soundcloud bandcamp}"
+    local spotdl_max_retries="${SPOTDL_MAX_RETRIES:-1}"
+    local spotdl_throttled_rate="${SPOTDL_THROTTLED_RATE:-100K}"
+
     local spotdl_cmd=(
         run_spotdl
         "$CLEAN_URL"
@@ -29,11 +33,11 @@ run_spotdl_download() {
         --scan-for-songs
         --overwrite skip
         --generate-lrc
-        --audio youtube youtube-music soundcloud bandcamp
-        --max-retries 1
+        --audio $spotdl_providers
+        --max-retries "$spotdl_max_retries"
         --save-errors erros.spotdl
         --respect-skip-file
-        --yt-dlp-args "--cookies-from-browser firefox --throttled-rate 100K"
+        --yt-dlp-args "--cookies-from-browser firefox --throttled-rate $spotdl_throttled_rate"
     )
 
     if [ "$is_playlist" = true ]; then

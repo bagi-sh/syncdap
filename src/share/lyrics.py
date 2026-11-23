@@ -6,6 +6,8 @@ import subprocess
 import urllib.parse
 import urllib.request
 
+from .constants import ID3_VERSION
+
 
 def fetch_lyrics(artist: str, title: str, album: str = "", duration: float | None = None, out_path: str = "", synced_only: bool = False):
     """
@@ -97,7 +99,7 @@ def embed_lyrics_into_file(audio_path: str, lrc_text: str) -> bool:
                 audio.add_tags()
             audio.tags.delall('USLT')
             audio.tags.add(USLT(encoding=3, lang='eng', desc='', text=text))
-            audio.save(v2_version=3)
+            audio.save(v2_version=ID3_VERSION)
             return True
 
         elif ext == '.flac':

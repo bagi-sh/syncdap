@@ -10,7 +10,7 @@ import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from share import AUDIO_EXTENSIONS
+from share import AUDIO_EXTENSIONS, COVER_NAME
 from share.covers import (
     find_cover_image,
     extract_cover_from_file,
@@ -41,7 +41,7 @@ def process_embed_album(idx, total, album_dir):
 
     # If no cover file on disk, try extracting from any track
     if not cover_file:
-        cover_out = os.path.join(album_dir, 'cover.jpg')
+        cover_out = os.path.join(album_dir, COVER_NAME)
         for f in audio_files:
             if extract_cover_from_file(f, cover_out):
                 cover_file = cover_out
@@ -99,7 +99,7 @@ def process_optimize_album(idx, total, album_dir):
 
     # If no cover on disk, extract from tracks that still have embeds
     if not cover_file:
-        cover_out = os.path.join(album_dir, 'cover.jpg')
+        cover_out = os.path.join(album_dir, COVER_NAME)
         for f in (tracks_with_embeds or audio_files):
             if extract_cover_from_file(f, cover_out):
                 cover_file = cover_out

@@ -51,9 +51,11 @@ resolve_music_root() {
 
 # Python runner helper with dependencies
 run_py() {
-    if command -v uv &>/dev/null; then
-        uv run --offline --with mutagen,eyed3,requests,pykakasi python3 "$@" 2>/dev/null || \
-        uv run --with mutagen,eyed3,requests,pykakasi python3 "$@" 2>/dev/null || \
+    if [ -n "${SYNCDAP_PYTHON:-}" ] && [ -x "$SYNCDAP_PYTHON" ]; then
+        "$SYNCDAP_PYTHON" "$@"
+    elif command -v uv &>/dev/null; then
+        uv run --offline --with mutagen,eyed3,requests,pykakasi,syncedlyrics python3 "$@" 2>/dev/null || \
+        uv run --with mutagen,eyed3,requests,pykakasi,syncedlyrics python3 "$@" 2>/dev/null || \
         python3 "$@"
     else
         python3 "$@"

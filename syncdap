@@ -1,50 +1,11 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Script: syncdap
-# Purpose: Modular Rockbox and DAP music library synchronization coordinator
+# Purpose: Root launcher for syncdap coordinator
 # ==============================================================================
 
 set -uo pipefail
 
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-
-# Source modular libraries
-source "$SCRIPT_DIR/src/sh/icons.sh"
-source "$SCRIPT_DIR/src/sh/config.sh"
-source "$SCRIPT_DIR/src/sh/common.sh"
-source "$SCRIPT_DIR/src/sh/downloader.sh"
-source "$SCRIPT_DIR/src/sh/playlists.sh"
-source "$SCRIPT_DIR/src/sh/cli.sh"
-source "$SCRIPT_DIR/src/sh/orchestrator.sh"
-
-main() {
-    parse_arguments "$@"
-
-    case "$SUBCOMMAND" in
-        download)   orchestrate_download ;;
-        search)     orchestrate_search ;;
-        rescue)     orchestrate_rescue ;;
-        status)     orchestrate_status ;;
-        dedup)      orchestrate_dedup ;;
-        patch)      orchestrate_patch ;;
-        optimize)   orchestrate_optimize ;;
-        library)    orchestrate_library "$SUBACTION" "${COMMAND_ARGS[@]:-}" ;;
-        artist)     orchestrate_artist "$SUBACTION" "${COMMAND_ARGS[@]:-}" ;;
-        album)      orchestrate_album "$SUBACTION" "${COMMAND_ARGS[@]:-}" ;;
-        track)      orchestrate_track "$SUBACTION" "${COMMAND_ARGS[@]:-}" ;;
-        covers)     orchestrate_covers "$SUBACTION" ;;
-        lyrics)     orchestrate_lyrics "$SUBACTION" ;;
-        playlist)   orchestrate_playlist "$SUBACTION" ;;
-        tags)       orchestrate_tags "$SUBACTION" ;;
-        scrobbler)  orchestrate_scrobbler "$SUBACTION" ;;
-        config)     handle_config_command "${COMMAND_ARGS[@]:-}" ;;
-        update)     perform_update ;;
-        uninstall)  perform_uninstall ;;
-        *)
-            error_dual "Unrecognized command '$SUBCOMMAND'" "The specified command is not supported by syncdap" "$SUBCOMMAND" "" "Run 'syncdap --help' for usage instructions."
-            exit 2
-            ;;
-    esac
-}
-
-main "$@"
+export SCRIPT_DIR
+exec "$SCRIPT_DIR/src/sh/main.sh" "$@"

@@ -317,7 +317,7 @@ show_version() {
         git_rev="$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || true)"
         [ -n "$git_rev" ] && rev=" ($git_rev)"
     fi
-    echo "syncdap ${SYNCDAP_VERSION:-2.0.0}${rev}"
+    echo "syncdap ${SYNCDAP_VERSION:-1.0.0}${rev}"
 }
 
 # Subcommand state variables

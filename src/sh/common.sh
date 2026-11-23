@@ -6,7 +6,7 @@
 
 set -uo pipefail
 
-SYNCDAP_VERSION="2.0.0"
+SYNCDAP_VERSION="1.0.0"
 
 # Source iconography and configuration modules
 source "$SCRIPT_DIR/src/sh/icons.sh"

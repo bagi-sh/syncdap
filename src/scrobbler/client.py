@@ -58,7 +58,7 @@ def call_api(
     full_params["format"] = "json"
 
     headers = {
-        "User-Agent": "Syncdap/2.0.0 (Linux; Rockbox Sync)",
+        "User-Agent": "Syncdap/1.0.0 (Linux; Rockbox Sync)",
         "Accept": "application/json",
     }
 

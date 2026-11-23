@@ -84,7 +84,7 @@ Commands follow a strict, predictable hierarchy: `syncdap <resource> <action> [t
 | Flag | Short | Description |
 |---|---|---|
 | `--help` | `-h` | Display concise usage, resources, or per-resource action help |
-| `--version` | `-V` | Output version string (`syncdap 2.0.0`) and exit |
+| `--version` | `-V` | Output version string (`syncdap 1.0.0`) and exit |
 | `--dry-run` | `-n` | Simulate execution without modifying audio files or tags |
 | `--root-dir <path>` | `-r` | Target music directory or DAP mount root (default: `.`) |
 | `--threads <num>` | `-t` | Worker thread concurrency for downloads and audio scans (default: `4`) |

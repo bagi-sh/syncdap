@@ -1,57 +1,88 @@
-# Module Reference: scrobbler (`src/scrobbler/`)
+# Python Module: scrobbler Subsystem (`src/scrobbler/`)
 
-The `scrobbler` module manages Rockbox `.scrobbler.log` parsing, Last.fm Desktop Web Services v2.0 authentication, batch submissions, and deduplication watermarks.
+`src/scrobbler/` is the dedicated synchronization and management subsystem for Rockbox `.scrobbler.log` playback files, interfacing with Last.fm's Audioscrobbler 2.0 API.
 
 ---
 
-## Architecture Overview
+## 1. Architectural Components
+
+- `cli.py`: Routes scrobbler actions (`sync`, `auth`, `status`, `logout`).
+- `parser.py`: Robust TSV parser for Audioscrobbler v1.1 log format with timezone heuristics.
+- `client.py`: Last.fm Web Services v2.0 client with MD5 request signing (`api_sig`) and 50-track batching.
+- `state.py`: Manages watermark tracking (`scrobbler.state`), credentials (`lastfm.conf`), and rotated log archives (`~/.config/syncdap/logs/`).
+- `auth.py`: Desktop Web Authentication token exchange and browser launching.
+
+---
+
+## 2. Synchronization Pipeline & Filtering Contracts
+
+When executing `syncdap scrobbler sync`:
 
 ```text
-src/scrobbler/
-├── __init__.py      # Package export interface
-├── auth.py          # Desktop authentication flow & browser handoff
-├── client.py        # Last.fm API client, MD5 signature generator, batch submitter
-├── parser.py        # Audioscrobbler v1.0 / v1.1 log parser & timezone handler
-├── state.py         # Human-editable INI/conf credential and watermark persistence
-└── cli.py           # Standalone argparse CLI entrypoint
+Rockbox .scrobbler.log on DAP
+             │
+             ▼
+   Parse Log Rows (8 TSV columns)
+             │
+             ├─► Filter 1: Rating check (rating == "L", drops "S" skips)
+             ├─► Filter 2: Watermark check (timestamp > last_synced_ts)
+             ├─► Filter 3: 14-Day Cutoff (now - timestamp <= 14 * 86400)
+             └─► Timezone Normalization (Applies UTC offset compensation)
+             │
+             ▼
+   Chunk into Batches of 50 Tracks
+             │
+             ▼
+   Dispatch POST track.scrobble to Last.fm (250ms inter-batch delay)
+             │
+             ├── [200 OK] Update watermark in scrobbler.state
+             └── [Offline] Retain pending scrobbles for next run
+             │
+             ▼
+   Archive & Rotate .scrobbler.log on DAP
 ```
 
 ---
 
-## Key Components
+## 3. The 14-Day Last.fm Hard Cutoff
 
-### 1. Audioscrobbler Log Parser (`parser.py`)
-* Reads `.scrobbler.log` adhering to Audioscrobbler v1.0 and v1.1 specifications.
-* Filters out skipped tracks (`rating != "L"`).
-* **Firmware Quirk Mitigation (Timezone)**: Certain Rockbox port builds (such as modern Innioasis or customized target builds) hardcode `#TZ/UTC` into the log header despite the DAP's RTC and playback timestamps being set to local time (e.g., UTC-3). `syncdap` ignores/overwrites the header `#TZ` directive by default using the host machine's timezone, or by explicit user configuration (`--timezone`, `--tz-offset`, or `scrobbler.tz_offset`).
-* **Preservation of Repeated Scrobbles**: Disables intra-log deduplication. Users frequently repeat songs; all listened playback instances (`rating == "L"`) are submitted to Last.fm.
-* **14-Day Expiration Guard**: Identifies and isolates tracks older than Last.fm's 14-day limit without halting valid tracks.
-* **Watermark Deduplication**: Skips entries with `timestamp <= last_scrobbled_timestamp` across runs to prevent re-submitting historical plays if `.scrobbler.log` was not removed from the DAP.
+Last.fm strictly rejects any scrobble with a timestamp older than **14 days** ($14 \times 86400 = 1,209,600\text{ seconds}$). 
+
+`parser.py` evaluates every entry against the current epoch:
+```python
+# From src/scrobbler/parser.py
+FOURTEEN_DAYS_SECONDS = 14 * 86400
+
+if (now - entry.timestamp) > FOURTEEN_DAYS_SECONDS:
+    # Flagged as expired, dropped to prevent API error code 29
+```
+Expired entries are logged as warnings and archived locally without submitting to Last.fm.
 
 ---
 
-## Rockbox Firmware Build Quirks & Design Decisions
+## 4. State Persistence & Atomic Watermark
 
-Rockbox is an open-source firmware ported across dozens of varied hardware targets by different maintainers. Not all ports implement the Audioscrobbler specification flawlessly:
+The sync state is recorded in `~/.config/syncdap/scrobbler.state`:
+```json
+{
+  "last_synced_ts": 1731884400,
+  "last_run_utc": "2026-11-23T00:00:00Z",
+  "submitted_count": 42
+}
+```
+State writes use atomic file replacement (`write -> fsync -> rename`), ensuring the watermark is never corrupted during sudden disconnects.
 
-1. **`#TZ/UTC` Overwrite Decision**:
-   Several target ports write `#TZ/UTC` regardless of the player's actual RTC timezone setting. If trusted, scrobbles end up shifted by several hours on Last.fm. To prevent this, `syncdap` overwrites `#TZ` using the host workstation's local timezone (or explicit `--timezone` / `--tz-offset` parameter).
-2. **Duplicate Scrobbles**:
-   Do not confuse repeated listening with log corruption. Repeated plays of the same song are legitimate and common; `syncdap` treats all entries with `L` rating as authentic plays.
-3. **Encoding Resilience**:
-   Some builds write ID3/Vorbis strings with non-standard UTF-8 bytes to the log. `syncdap` parses using `encoding="utf-8", errors="replace"` to ensure the parser never crashes.
+---
 
-### 2. Last.fm API Client (`client.py`)
-* Implements strict ASCII/byte lexicographical request signing (`api_sig = md5(sorted(params) + secret)`).
-* Chunks scrobbles into batches of up to 50 tracks.
-* Parses individual and batch results (`accepted` / `ignored`).
+## 5. CLI Invocations
 
-### 3. Desktop Authentication (`auth.py`)
-* Obtains temporary token via `auth.getToken`.
-* Directs user to browser authorization URL.
-* Polls `auth.getSession` every 2.5 seconds with graceful handling of `TokenPendingError` (code 14).
-* Stores session in `~/.config/syncdap/lastfm.conf` with `0600` permissions.
+```bash
+# Sync playback history from mounted DAP
+syncdap scrobbler -r /mnt/dap
 
-### 4. State & Backup Management (`state.py`)
-* Stores watermark in `~/.config/syncdap/scrobbler.state`.
-* Archives processed logs in `~/.config/syncdap/logs/scrobbler_<YYYY-MM-DD_HHMMSS>.log`.
+# Authenticate with Last.fm
+syncdap scrobbler auth
+
+# View scrobbler account and sync status
+syncdap scrobbler status
+```

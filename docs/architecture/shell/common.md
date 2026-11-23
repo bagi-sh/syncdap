@@ -1,13 +1,41 @@
 # Shell Coordinator: common.sh
 
-`src/sh/common.sh` provides the shared runtime foundation, process traps, dependency checks, and Python execution wrappers for all shell scripts.
+`src/sh/common.sh` establishes the shared execution foundation for all `syncdap` shell modules, providing process traps, isolated runtime environments, dependency verification, and Python runner wrappers.
 
 ---
 
-## 1. Environment & Temporary Directories
+## 1. Runtime State & Defaults
 
-To prevent orphaned files or unauthorized root filesystem writes, `common.sh` establishes an isolated session directory:
+Upon sourcing, `common.sh` sets shell safety flags:
 ```bash
+set -uo pipefail
+```
+It initializes global state variables and loads user configuration overrides:
+
+```bash
+SYNCDAP_VERSION="1.0.0"
+
+# Defaults prior to config/flag override
+AUDIO_FORMAT="mp3"
+THREADS=4
+SYNCED_ONLY=false
+ASSUME_YES=false
+KEEP_OLD=false
+DRY_RUN=false
+VERBOSE=false
+QUIET=false
+TARGET_ROOT="."
+FORCE_ICONS="auto"
+```
+
+---
+
+## 2. Process Isolation & Temporary Directory Traps
+
+To ensure complete crash safety and avoid leaving leftover temporary files during failed downloads or interrupted operations:
+
+```bash
+# Excerpt from src/sh/common.sh
 setup_environment() {
     [ -n "${TEMP_DIR:-}" ] && [ -d "$TEMP_DIR" ] && return 0
     MARKER=$(mktemp -t syncdap_marker.XXXXXX 2>/dev/null || mktemp /tmp/syncdap_marker.XXXXXX)
@@ -15,24 +43,70 @@ setup_environment() {
     trap cleanup EXIT INT TERM
     touch "$MARKER"
 }
+
+cleanup() {
+    local exit_code=$?
+    if [ -n "${TEMP_DIR:-}" ] && [ -d "$TEMP_DIR" ]; then
+        rm -rf "$TEMP_DIR"
+    fi
+    if [ -n "${MARKER:-}" ] && [ -f "$MARKER" ]; then
+        rm -f "$MARKER"
+    fi
+    exit "$exit_code"
+}
 ```
 
-Upon termination (normal exit or interrupt), the `cleanup` trap automatically purges `$TEMP_DIR` and any temporary marker files.
+---
+
+## 3. The `run_py` Execution Engine
+
+`syncdap` utilizes a 3-tier execution strategy to run internal Python engines without requiring users to manually manage virtual environments:
+
+```bash
+# Excerpt from src/sh/common.sh
+run_py() {
+    if [ -n "${SYNCDAP_PYTHON:-}" ] && [ -x "$SYNCDAP_PYTHON" ]; then
+        "$SYNCDAP_PYTHON" "$@"
+    elif command -v uv &>/dev/null; then
+        uv run --offline --with mutagen,eyed3,requests,pykakasi,syncedlyrics python3 "$@" 2>/dev/null || \
+        uv run --with mutagen,eyed3,requests,pykakasi,syncedlyrics python3 "$@" 2>/dev/null || \
+        python3 "$@"
+    else
+        python3 "$@"
+    fi
+}
+```
+
+1. **Explicit Environment (`SYNCDAP_PYTHON`):** If defined and executable, executes directly.
+2. **`uv` Isolated Cache:** If `uv` is installed, runs via `uv run --offline` using cached wheels. If offline cache fails, allows online wheel fetch.
+3. **System `python3` Fallback:** Executes directly with host Python if `uv` is not present.
 
 ---
 
-## 2. Python Engine Execution (`run_py`)
+## 4. Dual-Audience Error Formatting (`error_dual`)
 
-`syncdap` executes Python modules through the `run_py` helper:
-* Checks if **`uv`** is available on the system.
-* Runs with isolated, pre-cached dependencies:
-  ```bash
-  uv run --offline --with mutagen,eyed3,requests,pykakasi python3 "$@"
-  ```
-* Seamlessly falls back to system `python3` if `uv` is absent.
+`common.sh` implements standard Dual-Audience error messaging for all fatal command failures:
 
----
+```bash
+error_dual() {
+    local title="$1"
+    local message="$2"
+    local command_usage="$3"
+    local raw_output="${4:-}"
+    local recommendation="${5:-}"
 
-## 3. Dependency Validation (`check_dependencies`)
-
-Validates the presence of required system binaries: `ffmpeg`, `yt-dlp`, `python3`, `curl`, `grep`, and `spotDL`/`uv`. Missing tools result in immediate Dual-Audience error formatting on `stderr`.
+    echo -e "${RED}${ICON_ERR} ${BOLD}Error: ${title}${RESET}" >&2
+    echo -e "   ${message}" >&2
+    if [ -n "$command_usage" ]; then
+        echo -e "   Usage: ${CYAN}${command_usage}${RESET}" >&2
+    fi
+    if [ -n "$recommendation" ]; then
+        echo -e "   ${YELLOW}${recommendation}${RESET}" >&2
+    fi
+    if [ -n "$raw_output" ] && [ "$VERBOSE" = true ]; then
+        echo -e "\n${DIM}--- Diagnostic Trace ---" >&2
+        echo -e "${raw_output}${RESET}\n" >&2
+    fi
+}
+```
+All human diagnostics are sent to `stderr` (`>&2`), preserving `stdout` for JSON and plain Unix pipelines.

@@ -1,33 +1,65 @@
-# Python Subsystem: patch
+# Python Module: patch.py & Subsystem
 
-The `src/patch/` subsystem manages audio format transcoding, quality upgrades, and batch conversion.
-
----
-
-## 1. Package Structure
-
-* `src/patch/cli.py` – Subsystem argument parser and execution dispatcher.
-* `src/patch/worker.py` – Worker thread pool managing stream re-downloads and ffmpeg transcoding.
-* `src/patch/metadata.py` – Metadata preservation across transcoded audio containers.
-* `src/patch/playlist.py` – Playlist relinking after format changes (e.g., updating `.mp3` to `.flac`).
+`src/patch/` orchestrates format transcoding and audio quality upgrades, upgrading lower-bitrate tracks to lossless or modern codecs while strictly preserving tags, artwork, and playlist integrity.
 
 ---
 
-## 2. Supported Formats
+## 1. Subsystem Architecture
 
-Supports bidirectional transcoding and stream upgrading across:
-* **`flac`** (Lossless Free Lossless Audio Codec)
-* **`mp3`** (MPEG Layer-3, default 320kbps)
-* **`m4a`** (AAC Advanced Audio Coding)
-* **`opus`** (High-efficiency Ogg Opus)
-* **`ogg`** (Ogg Vorbis)
-* **`wav`** (Uncompressed linear PCM)
+The patch subsystem comprises four specialized components:
+- `cli.py`: Parses target format (`flac`, `mp3`, `m4a`, `opus`), filter terms, and thread parameters.
+- `worker.py`: Manages parallel transcoding jobs via `ThreadPoolExecutor` and `ffmpeg`.
+- `metadata.py`: Extracts existing audio tags and cover art before transcoding and reapplies them to the newly generated file.
+- `playlist.py`: Inspects playlists referencing old files and rewrites path extensions to point to the patched file.
 
 ---
 
-## 3. CLI Usage
+## 2. Tag & Artwork Preservation Protocol
+
+Transcoding audio with naive ffmpeg calls strips custom ID3 frames, ReplayGain values, and embedded artwork. `metadata.py` prevents metadata loss:
+
+```python
+# From src/patch/metadata.py
+def transfer_tags_to_file(dest_file: str, meta: dict, cover_path: str | None = None) -> bool:
+    img_data = meta.get('cover_data')
+    mime_type = meta.get('cover_mime', 'image/jpeg')
+    
+    # Write preserved metadata and artwork into the transcoded file
+    return write_audio_metadata(
+        dest_file,
+        title=meta.get('title'),
+        artist=meta.get('artist'),
+        album=meta.get('album'),
+        album_artist=meta.get('album_artist'),
+        track_num=meta.get('track_num'),
+        total_tracks=meta.get('total_tracks'),
+        year=meta.get('year'),
+        genre=meta.get('genre'),
+        cover_data=img_data,
+        cover_mime=mime_type,
+    )
+```
+
+---
+
+## 3. Atomic Replacement & Cleanup
+
+1. Transcoded audio is written to `$TEMP_DIR/<uuid>.<ext>`.
+2. Audio duration and integrity are verified with `ffprobe` / `mutagen`.
+3. If `keep_old=False`, the old file is purged, and the new file is moved into the album directory.
+4. Companion `.lrc` sidecars are renamed to match the new file stem.
+
+---
+
+## 4. CLI Invocations
 
 ```bash
-# Upgrade target folder to FLAC
-python3 src/patch/cli.py flac /tmp/session 4 false false "/path/to/album" "" false
+# Transcode entire library to FLAC using 4 threads
+syncdap library patch flac -r /mnt/dap/Music -t 4
+
+# Transcode a specific album to MP3 (320kbps)
+syncdap album patch mp3 "/mnt/dap/Music/Artist/Album"
+
+# Transcode tracks belonging to a specific playlist
+syncdap patch flac -P "Favorites"
 ```

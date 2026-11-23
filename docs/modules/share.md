@@ -1,22 +1,45 @@
-# Python Shared Package: share
+# Python Module: share Package (`src/share/`)
 
-The `src/share/` package provides reusable core utilities for audio file handling, metadata normalization, iconography, and text formatting.
+`src/share/` is the core foundation library containing common abstractions, constants, audio tag handlers, string sanitizers, and HTTP client wrappers used across all `syncdap` modules.
 
 ---
 
-## 1. Modules Breakdown
+## 1. Package Structure & Responsibilities
 
-* **`share.audio` (`src/share/audio.py`):**
-  * `find_audio_files(root_dir)`: Universal recursive audio file scanner that seamlessly handles directory paths or single file paths.
-  * `get_audio_metadata(fpath)`: Unified metadata reader returning duration, bitrate, sample rate, title, artist, album, album artist, and track numbers across FLAC, MP3, M4A, OGG, OPUS, and WAV.
-  * `write_audio_metadata(...)`: Atomic tag writer enforcing ID3v2.3 compliance.
-* **`share.icons` (`src/share/icons.py`):**
-  * `ICONS`: Dataclass exporting monochromatic Nerd Font, Safe Unicode, and ASCII symbols.
-  * `detect_nerd_font()`: Auto-detection checking font registries, environment variables (`NO_COLOR`), and TTY connectivity.
-* **`share.text` (`src/share/text.py`):**
-  * `clean_string()`: Strips illegal FAT32 characters, normalizes whitespace, and prevents invalid filesystem characters.
-  * `parse_filename_metadata()`: Heuristic parser deriving artist and track title from filenames when metadata tags are missing.
-* **`share.covers` (`src/share/covers.py`):**
-  * Helper functions for detecting and extracting embedded cover artwork frames.
-* **`share.api` (`src/share/api.py`):**
-  * Rate-limited HTTP client helper for querying metadata APIs with appropriate user-agent headers.
+| Module | Core Responsibility |
+|---|---|
+| `audio.py` | Universal audio tag reader/writer for MP3, FLAC, M4A, OGG, Opus, WAV |
+| `text.py` | FAT32/exFAT path sanitization, symbol replacements, and normalized string comparisons |
+| `constants.py` | Supported audio extensions, ignored system folders, and regex filters |
+| `api.py` | HTTP clients for iTunes, Deezer, and MusicBrainz APIs |
+| `covers.py` | Artwork extraction and ID3 `APIC` / FLAC `Picture` manipulation |
+| `lyrics.py` | LRCLIB client and `syncedlyrics` fallback wrapper |
+| `playlists.py` | M3U8 path parsing and relative directory remapping |
+| `config.py` | Python configuration reader for `~/.config/syncdap/` |
+| `icons.py` | Monochromatic glyphs and formatted terminal logging |
+
+---
+
+## 2. Universal Audio Metadata Abstraction (`audio.py`)
+
+Rather than having each module interact with format-specific Mutagen classes, `read_audio_metadata()` and `write_audio_metadata()` provide a unified interface:
+
+```python
+# From src/share/audio.py
+def read_audio_metadata(file_path: str, fallback_to_filename: bool = True) -> dict:
+    """
+    Universally extract tags, embedded URLs, and front cover art from an audio file.
+    Returns dict with keys: artist, title, album, album_artist, track_num,
+    total_tracks, year, genre, duration, spotify_url, youtube_url, cover_data, cover_mime.
+    """
+```
+
+- Transparently maps between ID3v2 frames (`TIT2`, `TPE1`, `TPE2`), Vorbis comments (`TITLE`, `ARTIST`, `ALBUMARTIST`), and MP4 atoms (`©nam`, `©ART`, `aART`).
+- Enforces strict ID3v2.3 UTF-16 compatibility when writing MP3 tags.
+
+---
+
+## 3. String Normalization & FAT32 Sanitization (`text.py`)
+
+- `normalize_str(s)`: Strips non-alphanumeric punctuation and lowercases strings for fuzzy matching.
+- `sanitize_filename(name, for_folder=False)`: Replaces FAT32-illegal characters (`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`) with underscores, replaces full-width Japanese punctuation, and strips trailing periods and spaces.

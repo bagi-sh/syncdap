@@ -10,6 +10,7 @@ By default, `syncdap` stores user settings at:
 ```text
 ~/.config/syncdap/config
 ```
+If `$XDG_CONFIG_HOME` is set, it resolves to `$XDG_CONFIG_HOME/syncdap/config`. If home is read-only, it falls back to `$PWD/.config/syncdap/config`.
 
 You can inspect or modify these settings using `syncdap config`:
 
@@ -28,7 +29,7 @@ syncdap config icons=true
 syncdap config format=flac
 
 # Set default worker threads concurrency
-syncdap config threads=4
+syncdap config threads=8
 
 # Set default music library or DAP mount root
 syncdap config root_dir=/mnt/dap/Music
@@ -46,34 +47,43 @@ syncdap config init
 | Key | Valid Options | Default | Description |
 |---|---|---|---|
 | `icons` | `true`, `false`, `auto` | `auto` | Controls terminal symbol rendering (Nerd Font vs Safe Unicode vs ASCII). |
-| `threads` | Integer (`1`–`16`) | `4` | Concurrency for audio analysis, lyrics searches, and stream processing. |
-| `format` | `flac`, `mp3`, `m4a`, `opus`, `ogg`, `wav` | `flac` | Target format for downloads, transcodes, and album expansions. |
+| `threads` | Integer (`1`–`32`) | `4` | Concurrency for audio analysis, lyrics searches, and stream processing. |
+| `format` | `flac`, `mp3`, `m4a`, `opus`, `ogg`, `wav` | `mp3` | Target format for downloads, transcodes, and album expansions. |
 | `root_dir` | Valid directory path | `.` (current directory) | Default path when `-r` is not explicitly passed. |
 | `synced_only` | `true`, `false` | `false` | Accept only timestamped `[mm:ss]` synchronized lyrics files. |
 
 ---
 
-## 3. DAP Hardware Mount Points
+## 3. Scrobbler Credentials & Security (`lastfm.conf`)
 
-When connecting an offline Digital Audio Player (DAP) running Rockbox or generic firmware:
+Last.fm desktop session credentials are saved separately to:
+```text
+~/.config/syncdap/lastfm.conf
+```
+- **Permission Invariant:** Automatically set to `0600` (`-rw-------`).
+- **Watermark Persistence:** Synchronization timestamps are maintained in `~/.config/syncdap/scrobbler.state`.
+- **Log Rotations:** Archived `.scrobbler.log` files are stored in `~/.config/syncdap/logs/`.
+
+---
+
+## 4. DAP Hardware Mount Points
+
+When connecting an offline Digital Audio Player (DAP) running Rockbox:
 
 1. **Mount your DAP filesystem:**
    ```bash
-   # Example: DAP mounted at /mnt/dap
-   ls /mnt/dap
+   sudo mount /dev/sdX1 /mnt/dap
    ```
-2. **Execute syncdap targeting the DAP mount:**
-   Pass the mount path using the `-r` flag:
+2. **Execute maintenance directly on the DAP volume:**
    ```bash
-   # Check DAP storage and tag integrity
-   syncdap library status -r /mnt/dap/Music
+   # Sync playback scrobbles
+   syncdap scrobbler -r /mnt/dap
 
-   # Run complete Rockbox optimization directly on DAP
-   syncdap library optimize -r /mnt/dap/Music
+   # Complete library optimization
+   syncdap library optimize -r /mnt/dap
    ```
-3. **Persist the DAP mount:**
-   If you regularly sync to the same mount:
+3. **Unmount cleanly before disconnecting USB:**
    ```bash
-   syncdap config root_dir=/mnt/dap/Music
+   sync && sudo umount /mnt/dap
    ```
-   Now `syncdap library status` automatically analyzes `/mnt/dap/Music` without needing `-r` every time.
+   Ensures FAT32 directory tables and metadata caches are completely flushed.

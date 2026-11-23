@@ -1,47 +1,77 @@
 # Shell Coordinator: orchestrator.sh
 
-`src/sh/orchestrator.sh` delegates operations from CLI inputs to the appropriate internal Python engines and external downloaders.
+`src/sh/orchestrator.sh` coordinates execution between shell-level arguments and the underlying Python processing modules, resolving directory paths, managing execution scopes, and chaining optimization pipelines.
 
 ---
 
-## 1. Responsibilities
+## 1. Subcommand Execution Table
 
-* **Entity Dispatch:** Routes execution across scopes (`orchestrate_library`, `orchestrate_artist`, `orchestrate_album`, `orchestrate_track`).
-* **Target Resolution:** Resolves artist and album directory paths dynamically when names or relative paths are passed.
-* **Full Optimization Pipeline (`orchestrate_optimize`):** Chaining deduplication, cover art extraction, tag unification, and playlist repair.
-* **Execution Formatting:** Routes informative diagnostics to `stderr` (`>&2`) while preserving clean data on `stdout`.
+`orchestrator.sh` routes parsed commands to dedicated orchestration functions:
+
+| Subcommand | Function | Python Module Invoked | Scope / Action |
+|---|---|---|---|
+| `download` | `orchestrate_download` | `src/sh/downloader.sh` | Spotify download via spotDL |
+| `search` | `orchestrate_search` | `src/modules/search.py` | Query metadata via iTunes/MusicBrainz |
+| `rescue` | `orchestrate_rescue` | `src/modules/fallback.py` | YouTube fallback download |
+| `library` | `orchestrate_library` | Varies (`stats`, `audit`, `dedup`, etc.) | Library-wide maintenance |
+| `artist` | `orchestrate_artist` | Varies | Scoped to `/Music/<Artist>/` |
+| `album` | `orchestrate_album` | Varies (`album_expander.py`, etc.) | Scoped to `/Music/<Artist>/<Album>/` |
+| `track` | `orchestrate_track` | `src/patch/worker.py`, etc. | Scoped to individual audio file |
+| `playlist` | `orchestrate_playlist` | `src/playlists/cli.py` | Interactive M3U manager |
+| `covers` | `orchestrate_covers` | `src/modules/covers.py` | Cover extraction & APIC stripping |
+| `lyrics` | `orchestrate_lyrics` | `src/modules/lyrics.py` | LRCLIB synchronization |
+| `tags` | `orchestrate_tags` | `src/modules/rockbox_tags.py` | Split-album tag unification |
+| `scrobbler`| `orchestrate_scrobbler`| `src/scrobbler/cli.py` | Last.fm log sync |
 
 ---
 
-## 2. Scoped Orchestration Functions
+## 2. Dynamic Target Path Resolution (`resolve_music_root`)
 
-### `orchestrate_library`
-Executes operations across the entire music collection or DAP mount:
-* `status`: Calls `src/modules/stats.py -r "$music_root"`.
-* `audit`: Scans for tracks >10m across the library using `src/modules/audit.py`.
-* `dedup`: Deduplicates audio files across all albums.
-* `optimize`: Runs the complete Rockbox pipeline.
-* `fix`: Standardizes `ALBUM` and `ALBUMARTIST` across all folders.
-* `romaji`: Transliterates Japanese text across the library.
-
-### `orchestrate_artist`
-Resolves the target artist folder within `$music_root` and scopes the operation:
+`syncdap` handles both flat folder structures and standard DAP structures (`/mnt/dap/Music/`):
 ```bash
-syncdap artist status "Queen"
-syncdap artist fix "Pink Floyd"
+# Excerpt from src/sh/common.sh & orchestrator.sh
+resolve_music_root() {
+    local base="${TARGET_ROOT:-.}"
+    if [ -d "$base/Music" ]; then
+        echo "$base/Music"
+    else
+        echo "$base"
+    fi
+}
 ```
 
-### `orchestrate_album`
-Targets a specific album folder or rip file:
+When targeting an artist (`syncdap artist audit "Queen"`):
+1. `orchestrator.sh` checks if `$music_root/Queen` exists.
+2. If absent, it performs case-insensitive directory matching:
+   ```bash
+   find "$music_root" -maxdepth 1 -mindepth 1 -type d -iname "$target_artist"
+   ```
+3. If no matching folder is found, it reports an `error_dual` on `stderr` and exits with code 2.
+
+---
+
+## 3. Full Optimization Pipeline (`orchestrate_optimize`)
+
+Executing `syncdap library optimize -r /mnt/dap` runs a coordinated multi-module pipeline:
+
 ```bash
-syncdap album audit ./Abbey_Road/
-syncdap album expand ./FullRip.mp3
-syncdap album optimize ./A_Night_at_the_Opera/
+# Logic structure from src/sh/orchestrator.sh
+orchestrate_optimize() {
+    local music_root
+    music_root="$(resolve_music_root)"
+
+    echo -e "${BLUE}${ICON_DISC} Step 1/4: Deduplicating audio tracks...${RESET}" >&2
+    run_py "$SCRIPT_DIR/src/modules/dedup.py" -r "$music_root" $([ "$DRY_RUN" = true ] && echo "--dry-run")
+
+    echo -e "${BLUE}${ICON_IMG} Step 2/4: Optimizing cover artwork (cover.jpg)...${RESET}" >&2
+    run_py "$SCRIPT_DIR/src/modules/covers.py" optimize -r "$music_root" $([ "$DRY_RUN" = true ] && echo "--dry-run")
+
+    echo -e "${BLUE}${ICON_TAG} Step 3/4: Unifying Rockbox ALBUMARTIST tags...${RESET}" >&2
+    run_py "$SCRIPT_DIR/src/modules/rockbox_tags.py" fix -r "$music_root" $([ "$DRY_RUN" = true ] && echo "--dry-run")
+
+    echo -e "${BLUE}${ICON_PL} Step 4/4: Relinking and repairing playlists...${RESET}" >&2
+    run_py "$SCRIPT_DIR/src/modules/playlist_repair.py" -r "$TARGET_ROOT" $([ "$DRY_RUN" = true ] && echo "--dry-run")
+}
 ```
 
-### `orchestrate_track`
-Executes single-file inspection, expansion, transliteration, or transcoding:
-```bash
-syncdap track status ./Bohemian_Rhapsody.flac
-syncdap track patch mp3 ./Lossless_Track.wav
-```
+Each stage inherits the global `-n` / `--dry-run` flag to preview modifications before touching disk files.

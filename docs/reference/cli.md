@@ -23,7 +23,7 @@ Where:
 | Flag | Short | Behavior |
 |---|---|---|
 | `--help` | `-h` | Output concise help information and exit `0`. |
-| `--version` | `-V` | Output semantic version (`syncdap 2.0.0`) and exit `0`. |
+| `--version` | `-V` | Output semantic version (`syncdap 1.0.0`) and exit `0`. |
 | `--verbose` | `-v` | Emit diagnostic telemetry to `stderr`. |
 | `--quiet` | `-q` | Suppress non-error status output (`stdout` emits only data or final confirmation). |
 | `--dry-run` | `-n` | Simulate execution without modifying filesystem or metadata. |

@@ -95,22 +95,55 @@ Commands follow a strict, predictable hierarchy: `syncdap <resource> <action> [t
 
 ---
 
-## Documentation Architecture
+## The Syncdap Book (Documentation)
 
-Exhaustive guides and technical references are organized in the [`docs/`](docs/) directory:
+Exhaustive guides, architecture specifications, and operational manuals are organized as an 8-chapter book in the [`docs/`](docs/) directory:
 
-* **[Getting Started](docs/getting-started/installation.md)**
-  * [Installation & Dependencies](docs/getting-started/installation.md)
-  * [Configuration & DAP Mounts](docs/getting-started/configuration.md)
-* **[System Architecture](docs/architecture/overview.md)**
-  * [Architectural Overview & Data Flow](docs/architecture/overview.md)
-  * [Shell Coordinator Layer](docs/architecture/shell/cli.md)
-  * [Metadata API Integration](docs/architecture/api/itunes.md)
-  * [Rockbox Hardware Constraints](docs/architecture/hardware/rockbox-model.md)
-* **[Python Modules Reference](docs/modules/stats.md)**
-  * Per-module documentation for all 15 core engines.
-* **[Complete CLI Reference](docs/reference/cli.md)**
-  * Exhaustive reference for all resources, actions, flags, and exit codes.
+* **[The Syncdap Book Overview](docs/index.md)** – Master reading guide, curriculum arc, and syllabus.
+* **[Chapter 1: Getting Started](docs/01-getting-started/01-installation.md)**
+  * [1.1 Installation & Toolchain Prerequisites](docs/01-getting-started/01-installation.md)
+  * [1.2 Configuration & DAP Mount Points](docs/01-getting-started/02-configuration.md)
+* **[Chapter 2: The Hardware & Target Environment](docs/02-hardware-target/01-rockbox-model.md)**
+  * [2.1 The Rockbox Audio & Database Model](docs/02-hardware-target/01-rockbox-model.md)
+  * [2.2 FAT32 Storage Constraints & VFS Limits](docs/02-hardware-target/02-fat32-storage.md)
+* **[Chapter 3: Two-Tier Architecture & Execution Runtime](docs/03-architecture-and-runtime/01-two-tier-model.md)**
+  * [3.1 Two-Tier Execution Model & Boundaries](docs/03-architecture-and-runtime/01-two-tier-model.md)
+  * [3.2 POSIX CLI Grammar & Routing](docs/03-architecture-and-runtime/02-shell-cli.md)
+  * [3.3 Workflow Orchestration Pipelines](docs/03-architecture-and-runtime/03-shell-orchestrator.md)
+  * [3.4 Runtime Lifecycle & Signal Trapping](docs/03-architecture-and-runtime/04-shell-lifecycle.md)
+* **[Chapter 4: Ingestion Pipeline & Metadata APIs](docs/04-ingestion-and-apis/01-ytdlp.md)**
+  * [4.1 yt-dlp Audio Stream Extraction](docs/04-ingestion-and-apis/01-ytdlp.md)
+  * [4.2 iTunes Search API Integration](docs/04-ingestion-and-apis/02-itunes.md)
+  * [4.3 MusicBrainz & Cover Art Archive](docs/04-ingestion-and-apis/03-musicbrainz.md)
+  * [4.4 LRCLIB Synchronized Lyrics](docs/04-ingestion-and-apis/04-lrclib.md)
+  * [4.5 Last.fm Web Auth & Scrobbler Protocol](docs/04-ingestion-and-apis/05-lastfm.md)
+* **[Chapter 5: Audio Normalization & Library Engines](docs/05-core-engines/01-organize.md)**
+  * [5.1 Canonical Folder Organization](docs/05-core-engines/01-organize.md)
+  * [5.2 Rockbox Tag Normalization & Split Album Prevention](docs/05-core-engines/02-rockbox-tags.md)
+  * [5.3 Artwork Optimization & APIC Stripping](docs/05-core-engines/03-covers.md)
+  * [5.4 Duration Auditing & Rip Detection](docs/05-core-engines/04-audit.md)
+  * [5.5 Full-Album Rip Expansion](docs/05-core-engines/05-album-expander.md)
+  * [5.6 Audio Transcoding & Patching](docs/05-core-engines/06-patch.md)
+  * [5.7 Lossless Deduplication](docs/05-core-engines/07-dedup.md)
+  * [5.8 Fallback Stream Rescue](docs/05-core-engines/08-fallback.md)
+  * [5.9 Multi-Provider Genre Enrichment](docs/05-core-engines/09-genres.md)
+  * [5.10 Interactive Search](docs/05-core-engines/10-search.md)
+  * [5.11 Concurrent Lyrics Download](docs/05-core-engines/11-lyrics.md)
+  * [5.12 Library Health Analytics](docs/05-core-engines/12-stats.md)
+* **[Chapter 6: Specialized Domain Subsystems](docs/06-specialized-subsystems/01-playlists.md)**
+  * [6.1 Interactive Terminal Playlists](docs/06-specialized-subsystems/01-playlists.md)
+  * [6.2 Fuzzy Levenshtein Playlist Relinking](docs/06-specialized-subsystems/02-playlist-repair.md)
+  * [6.3 Japanese Romaji Transliteration Pipeline](docs/06-specialized-subsystems/03-romaji.md)
+  * [6.4 Rockbox Scrobbler Synchronization](docs/06-specialized-subsystems/04-scrobbler.md)
+* **[Chapter 7: Shared Architecture & Core Foundations](docs/07-shared-utilities/01-architecture.md)**
+  * [7.1 Shared Package Architecture](docs/07-shared-utilities/01-architecture.md)
+  * [7.2 Universal Audio Metadata Engine](docs/07-shared-utilities/02-audio-engine.md)
+  * [7.3 String Normalization & FAT32 Sanitization](docs/07-shared-utilities/03-text-sanitization.md)
+  * [7.4 Constants, HTTP Pooling & Terminal Presentation](docs/07-shared-utilities/04-constants-and-runtime.md)
+* **[Chapter 8: Command-Line Interface Reference](docs/08-cli-reference/01-grammar.md)**
+  * [8.1 CLI Grammar & Global Options](docs/08-cli-reference/01-grammar.md)
+  * [8.2 Exit Codes & Dual-Audience Diagnostics](docs/08-cli-reference/02-exit-codes.md)
+  * [8.3 Complete Per-Resource Manual](docs/08-cli-reference/resources/01-library.md)
 
 ---
 
